@@ -1,0 +1,35 @@
+ 
+{% extends 'classifier/base.html' %}
+{% block content %}
+         <div class="mb-3 text-center">
+            <h2>Évaluation du Modèle en Temps Réel</h2>
+               {% if result %}
+                        <div class="alert alert-success mt-1">
+                            <p>{{ result }}</p>
+                        </div>
+                {% endif %}
+        </div>
+        
+        <div class="card col-lg-7 mt-5 mt-lg-0 d-flex align-items-stretch shadow" >
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <button type="submit" class="btn btn-primary">Lancer la prédiction</button>
+            </form>
+        </div>
+
+       
+        <!-- Script de prévisualisation -->
+    <script>
+        document.querySelector('input[type="file"]').onchange = evt => {
+            const [file] = evt.target.files
+            if (file) {
+                const preview = document.getElementById('preview');
+                preview.src = URL.createObjectURL(file);
+                preview.classList.remove('d-none');
+            }
+        }
+    </script>
+
+
+{% endblock %}
