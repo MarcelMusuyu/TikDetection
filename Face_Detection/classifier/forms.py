@@ -30,5 +30,5 @@ class ImageUploadForm(forms.Form):
  # Optionnel : Ajouter un champ texte pour des notes sur le test
     notes = forms.CharField(
         required=False,
-        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Ex: Test avec faible luminosité'})
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Ex: Test DE avec faible luminosité'})
     )
