@@ -82,7 +82,7 @@ WSGI_APPLICATION = 'Face_Detection.wsgi.application'
 # Permet à WhiteNoise de gérer les fichiers collectés dans STATIC_ROOT
 STORAGES = {
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage", 
     },
 }
 
