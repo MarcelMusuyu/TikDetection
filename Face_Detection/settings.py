@@ -25,7 +25,12 @@ SECRET_KEY = 'django-insecure-=5!-axi@b5tv#fd7nty&3%38qpo824j7oecpfytx9*rnom03yd
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'tikdetection.onrender.com',
+    '.onrender.com',      # Autorise tous les sous-domaines de Render
+    'localhost',
+    '127.0.0.1',
+]
 
 # Optionnel : si vous voulez un dossier static global à la racine du projet
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')] 
