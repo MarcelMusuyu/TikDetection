@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML — Détection & Classification IA</title>
+    
+    <!-- ÉTAPE 1 : IMPORTATION DES BIBLIOTHÈQUES EXTERNES (CDN) -->
+    <!-- Tailwind CSS pour le styling moderne et responsive -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7', 900: '#0c4a6e' },
+                        dark: { bg: '#0b1120', card: '#151e32', border: '#2a354d' }
+                    },
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome pour les icônes -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js pour les visualisations analytiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- ÉTAPE 2 : STYLES CSS PERSONNALISÉS ET ANIMATIONS -->
+    <style>
+        body { background-color: #0b1120; color: #e2e8f0; }
+        
+        /* Scrollbar personnalisée pour le thème sombre */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #151e32; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+        /* Animation de la ligne de scannage (Effet de Scannage) */
+        .scan-line {
+            position: absolute; width: 100%; height: 2px;
+            background: #0ea5e9; box-shadow: 0 0 15px #0ea5e9;
+            top: 0; left: 0; opacity: 0; pointer-events: none;
+        }
+        .scanning .scan-line {
+            opacity: 1; animation: scanAnim 1.2s linear infinite;
+        }
+        @keyframes scanAnim {
+            0% { top: 0%; } 100% { top: 100%; }
+        }
+
+        /* Style des boîtes de détection (Bounding Boxes) */
+        .bounding-box {
+            position: absolute; border: 2px solid #0ea5e9;
+            background: rgba(14, 165, 233, 0.08);
+            box-shadow: 0 0 12px rgba(14, 165, 233, 0.25);
+            display: none; transition: all 0.3s ease;
+        }
+
+        /* Transitions de page et effets d'apparition */
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* État actif du menu de navigation */
+        .nav-item.active {
+            background: linear-gradient(90deg, #0ea5e9 0%, #0284c7 100%);
+            color: white; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.35);
+        }
+
+        /* Loader circulaire */
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%; border-top: 3px solid #0ea5e9;
+            width: 28px; height: 28px; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Grille de la matrice de confusion */
+        .confusion-grid { display: grid; gap: 4px; }
+        .confusion-cell {
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 600; border-radius: 6px;
+            transition: transform 0.2s, filter 0.2s;
+        }
+        .confusion-cell:hover { transform: scale(1.1); z-index: 10; filter: brightness(1.2); }
+    </style>
+</head>
+<body class="h-screen overflow-hidden flex font-sans">
+
+    <!-- ÉTAPE 3 : BARRE LATÉRALE DE NAVIGATION -->
+    <aside class="w-20 lg:w-64 bg-dark-card border-r border-dark-border flex flex-col justify-between shadow-2xl z-20 transition-all duration-300">
+        <div>
+            <div class="h-20 flex items-center justify-center lg:justify-start lg:px-6 border-b border-dark-border">
+                
+                <span class="hidden lg:block ml-3 text-xl font-bold tracking-tight text-white">M L<span class="text-brand-500"></span></span>
+            </div>
+
+            <nav class="mt-8 px-2 lg:px-4 space-y-2">
+                <!-- ÉTAPE 3.1 : Liens de navigation vers les 4 sections du PDF -->
+                <button onclick="showPage('detection')" class="nav-item active w-full flex items-center px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-slate-800/50 transition-all duration-200 group">
+                    <i class="fa-solid fa-microscope w-6 text-lg group-hover:text-brand-400 transition-colors"></i>
+                    <span class="hidden lg:block ml-3 font-medium">Détection</span>
+                </button>
+                <button onclick="showPage('dashboard')" class="nav-item w-full flex items-center px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-slate-800/50 transition-all duration-200 group">
+                    <i class="fa-solid fa-chart-pie w-6 text-lg group-hover:text-brand-400 transition-colors"></i>
+                    <span class="hidden lg:block ml-3 font-medium">Tableau de Bord</span>
+                </button>
+                <button onclick="showPage('galerie')" class="nav-item w-full flex items-center px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-slate-800/50 transition-all duration-200 group">
+                    <i class="fa-solid fa-images w-6 text-lg group-hover:text-brand-400 transition-colors"></i>
+                    <span class="hidden lg:block ml-3 font-medium">Galerie</span>
+                </button>
+                <button onclick="showPage('config')" class="nav-item w-full flex items-center px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-slate-800/50 transition-all duration-200 group">
+                    <i class="fa-solid fa-sliders w-6 text-lg group-hover:text-brand-400 transition-colors"></i>
+                    <span class="hidden lg:block ml-3 font-medium">Configuration</span>
+                </button>
+            </nav>
+        </div>
+
+        <div class="hidden lg:block p-4 border-t border-dark-border">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-full bg-brand-900 flex items-center justify-center text-brand-400 font-bold border border-brand-500">A</div>
+                <div>
+                    <p class="text-sm font-semibold text-white">Administrateur</p>
+                    <p class="text-xs text-green-400 flex items-center"><span class="w-1.5 h-1.5 rounded-full bg-green-400 mr-1.5 animate-pulse"></span>En ligne</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ÉTAPE 4 : ZONE DE CONTENU PRINCIPAL -->
+    <main class="flex-1 overflow-y-auto relative bg-dark-bg">
+        
+        <!-- ========================================== -->
+        <!-- PAGE 1 : INTERFACE DE DÉTECTION ET CLASSIFICATION -->
+        <!-- ========================================== -->
+        <div id="page-detection" class="page-content p-6 lg:p-8 fade-in h-full flex flex-col">
+            <header class="mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+                <div>
+                    <h1 class="text-2xl lg:text-3xl font-bold text-white mb-1">Analyse & Classification</h1>
+                    <p class="text-gray-400 text-sm">Chargez une image pour une détection instantanée par le modèle IA.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="status-badge" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-900/30 text-emerald-400 border border-emerald-700/30">
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
+                        Système Opérationnel
+                    </span>
+                </div>
+            </header>
+
+            <div class="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-6 min-h-0">
+                <!-- Zone de Chargement (Gauche) -->
+                <div class="xl:col-span-3 bg-dark-card rounded-2xl p-5 border border-dark-border flex flex-col justify-center items-center transition-all hover:border-brand-500/40 relative cursor-pointer group" id="drop-zone">
+                    <input type="file" id="file-input" class="hidden" accept="image/*">
+                    
+                    <div id="upload-placeholder" class="text-center space-y-3 w-full">
+                        <div class="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto text-brand-500 mb-2 border border-slate-700 group-hover:scale-105 transition-transform">
+                            <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+                        </div>
+                        <h3 class="text-base font-semibold text-white">Glisser-Déposer</h3>
+                        <p class="text-xs text-gray-400">ou cliquez pour sélectionner</p>
+                        <button onclick="document.getElementById('file-input').click()" class="mt-2 px-5 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-brand-900/40 w-full">
+                            Parcourir fichiers
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Visualisation d'Image (Centre) -->
+                <div class="xl:col-span-6 bg-dark-card rounded-2xl border border-dark-border p-4 relative flex flex-col">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i class="fa-regular fa-eye text-brand-500"></i>Aperçu & Analyse
+                        </h2>
+                        <button id="reset-btn" class="hidden text-xs text-gray-400 hover:text-white bg-slate-800 px-3 py-1.5 rounded-lg transition-colors">
+                            <i class="fa-solid fa-rotate-right mr-1"></i>Réinitialiser
+                        </button>
+                    </div>
+                    
+                    <div class="flex-1 flex items-center justify-center bg-slate-900/60 rounded-xl overflow-hidden relative min-h-[350px] border border-slate-800/50">
+                        <!-- Container Image + Overlay -->
+                        <div id="image-container" class="relative max-w-full max-h-full p-2">
+                            <img id="preview-image" class="hidden max-w-full max-h-[450px] object-contain rounded-lg shadow-2xl border border-slate-700/50" src="" alt="Preview">
+                            
+                            <!-- Animation de Scannage -->
+                            <div id="scan-overlay" class="absolute inset-0 hidden pointer-events-none z-10">
+                                <div class="scan-line"></div>
+                                <div class="absolute bottom-3 left-3 text-brand-400 text-xs font-mono bg-slate-900/90 px-2 py-1 rounded border border-brand-500/30 shadow-lg">
+                                    <i class="fa-solid fa-circle-notch fa-spin mr-1"></i> ANALYSE EN COURS...
+                                </div>
+                            </div>
+
+                            <!-- Zone des Bounding Boxes -->
+                            <div id="boxes-container" class="absolute inset-0 w-full h-full z-20 pointer-events-none"></div>
+                        </div>
+
+                        <!-- État vide initial -->
+                        <div id="image-empty-state" class="text-gray-500 text-center flex flex-col items-center">
+                            <i class="fa-regular fa-image text-5xl mb-3 opacity-20"></i>
+                            <p class="text-sm">Aucune image chargée</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zone de Résultats (Droite) -->
+                <div class="xl:col-span-3 bg-dark-card rounded-2xl border border-dark-border flex flex-col">
+                    <div class="p-4 border-b border-dark-border flex justify-between items-center">
+                        <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-clipboard-check text-brand-500"></i>Résultats
+                        </h2>
+                        <button onclick="exportResults()" class="text-xs text-brand-400 hover:text-brand-300" title="Exporter CSV">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto p-4 space-y-3" id="results-list">
+                        <div class="text-center text-gray-500 mt-8 flex flex-col items-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles opacity-30 text-2xl"></i>
+                            <p class="text-sm">Les résultats apparaîtront ici.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Résumé Footer -->
+                    <div class="p-4 border-t border-dark-border bg-slate-800/30 rounded-b-2xl hidden" id="results-footer">
+                        <div class="flex justify-between text-xs mb-2">
+                            <span class="text-gray-400">Objets détectés</span>
+                            <span class="text-white font-bold bg-slate-700 px-2 py-0.5 rounded" id="total-count">0</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                            <span class="text-gray-400">Confiance Moy.</span>
+                            <span class="text-brand-400 font-bold" id="avg-confidence">0%</span>
+                        </div>
+                        <button class="mt-3 w-full py-2 bg-brand-600/20 text-brand-400 text-xs font-medium rounded-lg border border-brand-500/30 hover:bg-brand-600/30 transition-colors">
+                            <i class="fa-solid fa-file-export mr-1"></i> Télécharger Rapport PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PAGE 2 : TABLEAU DE BORD ET RAPPORTS ANALYTIQUES -->
+        <!-- ========================================== -->
+        <div id="page-dashboard" class="page-content p-6 lg:p-8 fade-in hidden">
+            <header class="mb-6">
+                <h1 class="text-2xl lg:text-3xl font-bold text-white mb-1">Tableau de Bord Analytique</h1>
+                <p class="text-gray-400 text-sm">Métriques de performance, matrices de confusion et historique des traitements.</p>
+            </header>
+
+            <!-- Cartes de Métriques -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-dark-card p-5 rounded-2xl border border-dark-border hover:border-slate-600 transition-colors">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="bg-blue-900/30 p-2.5 rounded-lg text-blue-400"><i class="fa-solid fa-crosshairs text-lg"></i></div>
+                        <span class="text-emerald-400 text-xs font-bold bg-emerald-900/30 px-2 py-0.5 rounded">+2.5%</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white">96.4%</h3>
+                    <p class="text-xs text-gray-400 mt-1">Précision Globale (mAP@0.5)</p>
+                </div>
+                <div class="bg-dark-card p-5 rounded-2xl border border-dark-border hover:border-slate-600 transition-colors">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="bg-purple-900/30 p-2.5 rounded-lg text-purple-400"><i class="fa-solid fa-layer-group text-lg"></i></div>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white">12,450</h3>
+                    <p class="text-xs text-gray-400 mt-1">Images Analysées</p>
+                </div>
+                <div class="bg-dark-card p-5 rounded-2xl border border-dark-border hover:border-slate-600 transition-colors">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="bg-orange-900/30 p-2.5 rounded-lg text-orange-400"><i class="fa-solid fa-triangle-exclamation text-lg"></i></div>
+                        <span class="text-rose-400 text-xs font-bold bg-rose-900/30 px-2 py-0.5 rounded">-0.4%</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white">124</h3>
+                    <p class="text-xs text-gray-400 mt-1">Faux Positifs (30j)</p>
+                </div>
+                <div class="bg-dark-card p-5 rounded-2xl border border-dark-border hover:border-slate-600 transition-colors">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="bg-teal-900/30 p-2.5 rounded-lg text-teal-400"><i class="fa-solid fa-bolt text-lg"></i></div>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white">45ms</h3>
+                    <p class="text-xs text-gray-400 mt-1">Latence Moyenne Inférence</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Graphique d'Évolution -->
+                <div class="lg:col-span-2 bg-dark-card p-5 rounded-2xl border border-dark-border">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-base font-semibold text-white">Précision du Modèle (30 derniers jours)</h3>
+                        <button class="text-xs text-brand-400 hover:text-brand-300 border border-slate-700 px-2 py-1 rounded transition-colors">
+                            <i class="fa-solid fa-filter mr-1"></i>Filtres
+                        </button>
+                    </div>
+                    <div class="h-64 w-full relative">
+                        <canvas id="accuracyChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Matrice de Confusion -->
+                <div class="bg-dark-card p-5 rounded-2xl border border-dark-border">
+                    <h3 class="text-base font-semibold text-white mb-4">Matrice de Confusion</h3>
+                    <div id="confusion-matrix" class="confusion-grid" style="grid-template-columns: repeat(5, 1fr);">
+                        <!-- En-têtes prédits -->
+                        <div></div>
+                        <div class="text-center text-[10px] text-gray-500 mb-1">Col</div>
+                        <div class="text-center text-[10px] text-gray-500 mb-1">Bus</div>
+                        <div class="text-center text-[10px] text-gray-500 mb-1">Per</div>
+                        <div class="text-center text-[10px] text-gray-500 mb-1">Véh</div>
+                        
+                        <!-- Ligne 1: Col -->
+                        <div class="text-right text-[10px] text-gray-500 flex items-center justify-end pr-2">Col</div>
+                        <div class="confusion-cell bg-emerald-900 text-emerald-300 h-10">85</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">2</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">0</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">1</div>
+                        <!-- Ligne 2: Bus -->
+                        <div class="text-right text-[10px] text-gray-500 flex items-center justify-end pr-2">Bus</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">1</div>
+                        <div class="confusion-cell bg-emerald-900 text-emerald-300 h-10">92</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">1</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">0</div>
+                        <!-- Ligne 3: Per -->
+                        <div class="text-right text-[10px] text-gray-500 flex items-center justify-end pr-2">Per</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">0</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">0</div>
+                        <div class="confusion-cell bg-emerald-900 text-emerald-300 h-10">78</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">4</div>
+                        <!-- Ligne 4: Véh -->
+                        <div class="text-right text-[10px] text-gray-500 flex items-center justify-end pr-2">Véh</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">1</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">1</div>
+                        <div class="confusion-cell bg-slate-800 text-gray-400 h-10">2</div>
+                        <div class="confusion-cell bg-emerald-900 text-emerald-300 h-10">88</div>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-3 text-center">Normalisé sur les 4 classes principales du dataset</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PAGE 3 : GALERIE ET TRAÇABILITÉ DES DONNÉES -->
+        <!-- ========================================== -->
+        <div id="page-galerie" class="page-content p-6 lg:p-8 fade-in hidden">
+            <header class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl lg:text-3xl font-bold text-white mb-1">Galerie & Traçabilité</h1>
+                    <p class="text-gray-400 text-sm">Historique des analyses, archivage sécurisé et consultation rétrospective.</p>
+                </div>
+                <div class="relative w-full md:w-80">
+                    <input type="text" id="gallery-search" placeholder="Rechercher par date, tag ou ID..." class="w-full bg-dark-card border border-dark-border text-white rounded-xl px-4 py-2.5 pl-10 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/50 transition-all">
+                    <i class="fa-solid fa-search absolute left-3.5 top-3 text-gray-500 text-sm"></i>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5" id="gallery-grid">
+                <!-- Les cartes de la galerie seront injectées ici par JavaScript -->
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PAGE 4 : CONFIGURATION ET PARAMÈTRES -->
+        <!-- ========================================== -->
+        <div id="page-config" class="page-content p-6 lg:p-8 fade-in hidden">
+            <header class="mb-6">
+                <h1 class="text-2xl lg:text-3xl font-bold text-white mb-1">Configuration Système</h1>
+                <p class="text-gray-400 text-sm">Réglage des seuils de détection, paramètres API et maintenance.</p>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Paramètres du Modèle -->
+                <div class="bg-dark-card p-6 rounded-2xl border border-dark-border">
+                    <h3 class="text-lg font-semibold text-white mb-5 border-b border-dark-border pb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-brand-500"></i> Paramètres du Modèle
+                    </h3>
+                    
+                    <div class="space-y-6">
+                        <!-- Seuil de Confiance -->
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <label class="text-gray-300 text-sm font-medium">Seuil de Confiance (Confidence Threshold)</label>
+                                <span id="conf-val" class="text-brand-400 font-bold bg-brand-900/30 px-2 py-0.5 rounded text-xs">0.65</span>
+                            </div>
+                            <input type="range" id="confidence-threshold" min="0" max="1" step="0.01" value="0.65" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500" oninput="updateConfigVal('conf-val', this.value)">
+                            <p class="text-[11px] text-gray-500 mt-1.5">Ignorer les détections inférieures à cette probabilité.</p>
+                        </div>
+
+                        <!-- Seuil IoU -->
+                        <div>
+                            <div class="flex justify-between mb-2">
+                                <label class="text-gray-300 text-sm font-medium">Seuil IoU (Non-Max Suppression)</label>
+                                <span id="iou-val" class="text-brand-400 font-bold bg-brand-900/30 px-2 py-0.5 rounded text-xs">0.45</span>
+                            </div>
+                            <input type="range" id="iou-threshold" min="0" max="1" step="0.01" value="0.45" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500" oninput="updateConfigVal('iou-val', this.value)">
+                        </div>
+
+                        <!-- Max Détections -->
+                        <div>
+                            <label class="text-gray-300 text-sm font-medium mb-2 block">Max Détections par Image</label>
+                            <select class="w-full bg-slate-800 border border-dark-border text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30">
+                                <option>100</option><option>200</option><option>500</option><option>1000</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Intégration API & Système -->
+                <div class="bg-dark-card p-6 rounded-2xl border border-dark-border">
+                    <h3 class="text-lg font-semibold text-white mb-5 border-b border-dark-border pb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-network-wired text-brand-500"></i> Intégration API & Système
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-gray-300 text-sm font-medium mb-1.5 block">API Endpoint URL</label>
+                            <div class="flex items-center gap-2">
+                                <input type="text" value="https://api.neuralvision.local/v2/predict" class="flex-1 bg-slate-800 border border-dark-border text-gray-400 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" readonly>
+                                <button class="px-3 py-2 bg-slate-700 text-gray-300 rounded-lg hover:bg-slate-600 text-sm" onclick="alert('URL copiée dans le presse-papier')"><i class="fa-regular fa-copy"></i></button>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="text-gray-300 text-sm font-medium mb-1.5 block">Clé API Secrète</label>
+                            <div class="flex gap-2">
+                                <input type="password" value="sk_live_51M..." class="flex-1 bg-slate-800 border border-dark-border text-gray-400 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500" readonly>
+                                <button class="px-3 py-2 bg-slate-700 text-gray-300 rounded-lg hover:bg-slate-600 text-sm"><i class="fa-regular fa-eye"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 flex items-center justify-between bg-slate-800/30 p-3 rounded-lg border border-dark-border">
+                            <div>
+                                <p class="text-white text-sm font-medium">Mode Maintenance</p>
+                                <p class="text-xs text-gray-500">Désactive temporairement l'ingestion des requêtes</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer">
+                                <div class="w-10 h-5 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex justify-end gap-3">
+                        <button class="px-4 py-2 rounded-lg text-gray-300 hover:text-white border border-dark-border hover:border-gray-500 transition-colors text-sm">Réinitialiser</button>
+                        <button class="px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-500 transition-colors shadow-lg shadow-brand-900/40 text-sm font-medium" onclick="alert('Configuration sauvegardée avec succès.')">Sauvegarder</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ÉTAPE 5 : MODAL DE DÉTAILS (Pour la Galerie) -->
+    <div id="detail-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+        <div class="bg-dark-card border border-dark-border rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform scale-95 transition-transform duration-300 shadow-2xl" id="modal-content">
+            <div class="flex justify-between items-center p-5 border-b border-dark-border bg-slate-800/20">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-fingerprint text-brand-500"></i> Analyse #<span id="modal-id"></span>
+                </h3>
+                <button onclick="closeModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-gray-400 hover:text-white transition-colors">&times;</button>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <img id="modal-image" src="" class="w-full rounded-xl border border-slate-700 shadow-lg mb-4 bg-slate-900">
+                    <div class="flex justify-between text-xs text-gray-400 bg-slate-800/50 p-2 rounded-lg border border-dark-border">
+                        <span><i class="fa-regular fa-clock mr-1.5 text-brand-500"></i> <span id="modal-date"></span></span>
+                        <span><i class="fa-solid fa-weight-scale mr-1.5 text-brand-500"></i> <span id="modal-size"></span></span>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="text-base font-semibold text-white mb-4">Résultats de la Détection</h4>
+                    <div id="modal-results" class="space-y-2">
+                        <!-- Résultats injectés dynamiquement -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ÉTAPE 6 : LOGIQUE JAVASCRIPT (GESTION DES FONCTIONNALITÉS) -->
+    <script>
+        // ==========================================
+        // GESTION DE LA NAVIGATION
+        // ==========================================
+        function showPage(pageId) {
+            // 6.1 : Masquer toutes les pages
+            document.querySelectorAll('.page-content').forEach(el => {
+                el.classList.add('hidden');
+                el.classList.remove('fade-in');
+            });
+            // 6.2 : Afficher la page cible avec animation
+            const target = document.getElementById('page-' + pageId);
+            target.classList.remove('hidden');
+            void target.offsetWidth; // Force reflow pour redéclencher l'animation CSS
+            target.classList.add('fade-in');
+            
+            // 6.3 : Mettre à jour l'état actif du menu
+            document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+            const indexMap = { 'detection': 0, 'dashboard': 1, 'galerie': 2, 'config': 3 };
+            if(indexMap[pageId] !== undefined) {
+                document.querySelectorAll('.nav-item')[indexMap[pageId]].classList.add('active');
+            }
+        }
+
+        // ==========================================
+        // GESTION DE LA CONFIGURATION
+        // ==========================================
+        function updateConfigVal(id, val) {
+            document.getElementById(id).textContent = parseFloat(val).toFixed(2);
+        }
+
+        // ==========================================
+        // GESTION DE L'UPLOAD & DRAG & DROP
+        // ==========================================
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const previewImage = document.getElementById('preview-image');
+        const imageEmptyState = document.getElementById('image-empty-state');
+        const imageContainer = document.getElementById('image-container');
+        const scanOverlay = document.getElementById('scan-overlay');
+        const resultsList = document.getElementById('results-list');
+        const resultsFooter = document.getElementById('results-footer');
+        const boxesContainer = document.getElementById('boxes-container');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // 6.4 : Empêcher le comportement par défaut du navigateur sur les événements de drag
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
+        });
+
+        // Effets visuels au survol
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('border-brand-500', 'bg-slate-800/30'), false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-brand-500', 'bg-slate-800/30'), false);
+        });
+
+        // Gestion du dépôt de fichier
+        dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
+        fileInput.addEventListener('change', function() { handleFiles(this.files); });
+
+        function handleFiles(files) {
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    displayImage(e.target.result);
+                    startSimulation(); // Simule l'appel backend
+                };
+                reader.readAsDataURL(files[0]);
+            } else {
+                alert('Veuillez sélectionner une image valide (JPG, PNG, WEBP).');
+            }
+        }
+
+        function displayImage(src) {
+            previewImage.src = src;
+            previewImage.classList.remove('hidden');
+            previewImage.classList.add('block');
+            imageEmptyState.classList.add('hidden');
+            resultsFooter.classList.remove('hidden');
+            resetBtn.classList.remove('hidden');
+            
+            // Réinitialiser les résultats précédents
+            resultsList.innerHTML = '<div class="flex items-center justify-center h-32"><div class="loader"></div><span class="ml-3 text-gray-400 text-sm">Chargement du modèle...</span></div>';
+            boxesContainer.innerHTML = '';
+            scanOverlay.classList.add('hidden');
+            document.getElementById('image-container').classList.remove('scanning');
+        }
+
+        resetBtn.addEventListener('click', () => {
+            previewImage.classList.add('hidden');
+            imageEmptyState.classList.remove('hidden');
+            resetBtn.classList.add('hidden');
+            resultsFooter.classList.add('hidden');
+            resultsList.innerHTML = '<div class="text-center text-gray-500 mt-8 flex flex-col items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles opacity-30 text-2xl"></i><p class="text-sm">Les résultats apparaîtront ici.</p></div>';
+            boxesContainer.innerHTML = '';
+            fileInput.value = '';
+        });
+
+        // ==========================================
+        // SIMULATION DE L'ANALYSE IA (MOCK BACKEND)
+        // ==========================================
+        function startSimulation() {
+            // 6.5 : Déclencher l'animation de scannage
+            const container = document.getElementById('image-container');
+            container.classList.add('scanning');
+            scanOverlay.classList.remove('hidden');
+
+            // Simuler un délai réseau/inférence (1.8s)
+            setTimeout(() => {
+                container.classList.remove('scanning');
+                scanOverlay.classList.add('hidden');
+                showMockResults();
+            }, 1800);
+        }
+
+        function showMockResults() {
+            // Données fictives générées par le "modèle"
+            const mockDetections = [
+                { label: 'Voiture', conf: 0.98, box: [15, 25, 65, 70], color: '#0ea5e9' },
+                { label: 'Piéton', conf: 0.86, box: [60, 40, 85, 85], color: '#a855f7' },
+                { label: 'Panneau', conf: 0.74, box: [20, 10, 40, 30], color: '#22c55e' },
+                { label: 'Camion', conf: 0.68, box: [70, 55, 95, 95], color: '#f59e0b' }
+            ];
+
+            // 6.6 : Construire la liste des résultats et les bounding boxes
+            let html = '';
+            boxesContainer.innerHTML = '';
+            let totalConf = 0;
+            
+            mockDetections.forEach((det, idx) => {
+                totalConf += det.conf;
+                // Carte de résultat
+                html += `
+                <div class="bg-slate-800/40 rounded-xl p-3 border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-white text-sm font-semibold flex items-center">
+                            <span class="w-2 h-2 rounded-full mr-2" style="background:${det.color}"></span>
+                            ${det.label}
+                        </span>
+                        <span class="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-700 text-white">${(det.conf * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="w-full bg-slate-700 h-1 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full" style="width: ${det.conf * 100}%; background:${det.color}"></div>
+                    </div>
+                </div>`;
+
+                // Overlay Bounding Box
+                const boxDiv = document.createElement('div');
+                boxDiv.className = 'bounding-box';
+                boxDiv.style.borderColor = det.color;
+                // Positionnement relatif en pourcentage
+                boxDiv.style.left = det.box[0] + '%';
+                boxDiv.style.top = det.box[1] + '%';
+                boxDiv.style.width = (det.box[2] - det.box[0]) + '%';
+                boxDiv.style.height = (det.box[3] - det.box[1]) + '%';
+                boxDiv.style.display = 'block';
+                
+                boxDiv.innerHTML = `<span class="absolute -top-6 left-0 ${det.label === 'Panneau' ? 'bg-green-600' : 'bg-brand-600'} text-white text-[10px] px-1.5 py-0.5 rounded-t font-bold whitespace-nowrap">${det.label} ${(det.conf*100).toFixed(0)}%</span>`;
+                boxesContainer.appendChild(boxDiv);
+            });
+
+            resultsList.innerHTML = html;
+            
+            // 6.7 : Mettre à jour les statistiques globales
+            const count = mockDetections.length;
+            document.getElementById('total-count').textContent = count;
+            document.getElementById('avg-confidence').textContent = ((totalConf / count) * 100).toFixed(1) + '%';
+        }
+
+        function exportResults() {
+            alert("Exportation des données en format CSV lancée.\n(Fonctionnalité simulée pour la démo)");
+        }
+
+        // ==========================================
+        // INITIALISATION DU GRAPHIQUE (DASHBOARD)
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            renderGallery();
+            
+            const ctx = document.getElementById('accuracyChart').getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 250);
+            gradient.addColorStop(0, 'rgba(14, 165, 233, 0.4)');
+            gradient.addColorStop(1, 'rgba(14, 165, 233, 0.0)');
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 15}, (_, i) => `J-${30-i*2}`),
+                    datasets: [{
+                        label: 'Précision (%)',
+                        data: [94.1, 94.3, 94.0, 94.6, 94.9, 94.8, 95.1, 95.4, 95.2, 95.7, 95.9, 95.8, 96.1, 96.2, 96.4],
+                        borderColor: '#0ea5e9',
+                        backgroundColor: gradient,
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: '#0ea5e9'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#151e32', titleColor: '#fff', bodyColor: '#cbd5e1', borderColor: '#2a354d', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+                    scales: {
+                        x: { grid: { color: '#2a354d', borderDash: [4, 4] }, ticks: { color: '#64748b', maxTicksLimit: 8 } },
+                        y: { min: 92, max: 98, grid: { color: '#2a354d', borderDash: [4, 4] }, ticks: { color: '#64748b', stepSize: 2 } }
+                    }
+                }
+            });
+        });
+
+        // ==========================================
+        // GESTION DE LA GALERIE ET RECHERCHE
+        // ==========================================
+        const galleryData = [
+            { id: 'IMG-892', date: '10 Avr 2026', tags: ['Voiture', 'Urbain'], img: 'https://images.unsplash.com/photo-1494783367193-149034c05e8f?auto=format&fit=crop&w=400&q=80', count: 4 },
+            { id: 'IMG-891', date: '10 Avr 2026', tags: ['Piéton', 'Nuit'], img: 'https://images.unsplash.com/photo-1517424682346-3d888917cc49?auto=format&fit=crop&w=400&q=80', count: 2 },
+            { id: 'IMG-889', date: '09 Avr 2026', tags: ['Panneau', 'Route'], img: 'https://images.unsplash.com/photo-1595113316349-9fa4eb24f884?auto=format&fit=crop&w=400&q=80', count: 1 },
+            { id: 'IMG-885', date: '08 Avr 2026', tags: ['Camion', 'Autoroute'], img: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=400&q=80', count: 3 },
+            { id: 'IMG-880', date: '07 Avr 2026', tags: ['Vélo', 'Parc'], img: 'https://images.unsplash.com/photo-1571068316344-75bc76f77890?auto=format&fit=crop&w=400&q=80', count: 1 },
+            { id: 'IMG-875', date: '06 Avr 2026', tags: ['Bus', 'Centre-ville'], img: 'https://images.unsplash.com/photo-1570125909232-eb263c188f7e?auto=format&fit=crop&w=400&q=80', count: 2 },
+        ];
+
+        function renderGallery(filter = '') {
+            const grid = document.getElementById('gallery-grid');
+            grid.innerHTML = '';
+            
+            const filtered = galleryData.filter(item => 
+                item.tags.join(' ').toLowerCase().includes(filter.toLowerCase()) ||
+                item.date.toLowerCase().includes(filter.toLowerCase()) ||
+                item.id.toLowerCase().includes(filter.toLowerCase())
+            );
+
+            if(filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-10 text-gray-500"><i class="fa-solid fa-magnifying-glass mb-2 text-2xl opacity-50"></i><p>Aucun résultat trouvé.</p></div>`;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'bg-dark-card rounded-xl overflow-hidden border border-dark-border hover:border-brand-500/40 transition-all hover:-translate-y-1 group cursor-pointer shadow-lg shadow-black/20';
+                card.onclick = () => openModal(item);
+                card.innerHTML = `
+                    <div class="h-40 overflow-hidden relative bg-slate-800">
+                        <img src="${item.img}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 opacity-90 group-hover:opacity-100">
+                        <div class="absolute top-2 right-2 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded backdrop-blur-sm border border-slate-700/50">
+                            ${item.count} Objets
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <div class="flex justify-between items-center mb-1.5">
+                            <h4 class="font-bold text-white text-xs tracking-wide">${item.id}</h4>
+                            <span class="text-[10px] text-gray-500">${item.date}</span>
+                        </div>
+                        <div class="flex gap-1 flex-wrap">
+                            ${item.tags.map(t => `<span class="text-[9px] bg-slate-800 text-gray-400 px-1.5 py-0.5 rounded border border-slate-700">${t}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        document.getElementById('gallery-search').addEventListener('input', (e) => renderGallery(e.target.value));
+
+        // Modal Logic
+        function openModal(item) {
+            const modal = document.getElementById('detail-modal');
+            const content = document.getElementById('modal-content');
+            
+            document.getElementById('modal-id').textContent = item.id;
+            document.getElementById('modal-date').textContent = item.date;
+            document.getElementById('modal-image').src = item.img.replace('w=400', 'w=800');
+            
+            // Génération de résultats fictifs pour le modal
+            const resultsHtml = `
+                <div class="space-y-2">
+                    ${item.tags.map((tag, i) => `
+                        <div class="flex items-center justify-between bg-slate-800/40 p-2.5 rounded-lg border border-slate-700/50">
+                            <div class="flex items-center">
+                                <div class="w-7 h-7 rounded-full bg-brand-900/50 flex items-center justify-center text-brand-400 mr-2 border border-brand-500/20">
+                                    <i class="fa-solid fa-check text-[10px]"></i>
+                                </div>
+                                <span class="text-gray-200 text-sm font-medium">${tag}</span>
+                            </div>
+                            <span class="text-brand-400 font-bold text-sm">${(92 - i * 6)}%</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            document.getElementById('modal-results').innerHTML = resultsHtml;
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('detail-modal');
+            const content = document.getElementById('modal-content');
+            modal.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+        
+        // Fermer le modal au clic extérieur
+        document.getElementById('detail-modal').addEventListener('click', (e) => { if (e.target.id === 'detail-modal') closeModal(); });
+    </script>
+</body>
+</html>
+
