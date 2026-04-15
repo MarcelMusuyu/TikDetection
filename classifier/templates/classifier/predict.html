@@ -538,7 +538,11 @@
 
         // Gestion du dépôt de fichier
         dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
-        fileInput.addEventListener('change', function() { handleFiles(this.files); });
+        fileInput.addEventListener('change', function() { 
+            handleFiles(this.files);
+            uploadEtClasser(this.files[0]);
+                                                        
+        });
 
         function handleFiles(files) {
             if (files.length > 0 && files[0].type.startsWith('image/')) {
@@ -598,10 +602,10 @@
         function showMockResults() {
             // Données fictives générées par le "modèle"
             const mockDetections = [
-                { label: 'Voiture', conf: 0.98, box: [15, 25, 65, 70], color: '#0ea5e9' },
-                { label: 'Piéton', conf: 0.86, box: [60, 40, 85, 85], color: '#a855f7' },
-                { label: 'Panneau', conf: 0.74, box: [20, 10, 40, 30], color: '#22c55e' },
-                { label: 'Camion', conf: 0.68, box: [70, 55, 95, 95], color: '#f59e0b' }
+                { label: 'Marcel', conf: 0.98, box: [15, 25, 65, 70], color: '#0ea5e9' },
+                { label: 'Hugues', conf: 0.86, box: [60, 40, 85, 85], color: '#a855f7' },
+                { label: 'Jemima', conf: 0.74, box: [20, 10, 40, 30], color: '#22c55e' },
+                { label: 'Unknow', conf: 0.68, box: [70, 55, 95, 95], color: '#f59e0b' }
             ];
 
             // 6.6 : Construire la liste des résultats et les bounding boxes
@@ -793,6 +797,82 @@
         
         // Fermer le modal au clic extérieur
         document.getElementById('detail-modal').addEventListener('click', (e) => { if (e.target.id === 'detail-modal') closeModal(); });
+
+        async function classifierVisage(donneesImage) {
+            const url = 'https://nyembo-face-recognition-api.hf.space/classify';
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(donneesImage) // Les données que tu envoies
+                });
+        
+                const result = await response.json();
+                
+                console.log("Identité détectée :", result.identite);
+                console.log("Confiance :", (result.confiance * 100).toFixed(2) + "%");
+                
+                return result;
+            } catch (error) {
+                console.error("Erreur lors de la classification :", error);
+            }
+        }
+
+        async function uploadEtClasser(file) {
+            const url = 'https://nyembo-face-recognition-api.hf.space/classify';
+            
+            // Création du conteneur pour le fichier
+            const formData = new FormData();
+            formData.append('file', file); // 'file' est la clé souvent attendue par FastAPI/Flask
+        
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData 
+                    // Note : Ne PAS ajouter de 'Content-Type' manuellement, 
+                    // le navigateur le fera automatiquement avec le "boundary" correct.
+                });
+        
+                const data = await response.json();
+                console.log("Résultat de l'API :", data);
+                
+                // Exemple d'affichage du résultat
+                alert(`Identité : ${data.identite} (${(data.confiance * 100).toFixed(2)}%)`);
+                
+            } catch (error) {
+                console.error("Erreur réseau ou API :", error);
+            }
+    }
+
+        async function detecterVisages(seuilConfiance = 0.25) {
+                const baseUrl = 'https://nyembo-face-recognition-api.hf.space/detect';
+                const url = `${baseUrl}?conf=${seuilConfiance}`;
+            
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST', // Ou 'GET' selon la configuration de ton API FastAPI/Flask
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+            
+                    const data = await response.json();
+                    
+                    console.log(`Nombre de visages trouvés : ${data.count}`);
+                    
+                    // Parcourir les détections
+                    data.detections.forEach(det => {
+                        console.log(`Label: ${det.label}, Confiance: ${det.confidence}`);
+                    });
+            
+                    return data;
+                } catch (error) {
+                    console.error("Erreur lors de la détection :", error);
+                }
+        }
     </script>
 </body>
 </html>
