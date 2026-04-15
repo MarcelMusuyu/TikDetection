@@ -599,6 +599,82 @@
             }, 1800);
         }
 
+function showRealResults(apiData) {
+    // 1. Définition des couleurs pour chaque personne
+    const couleurs = {
+        'marcel': '#0ea5e9',
+        'hugues': '#a855f7',
+        'jemima': '#22c55e',
+        'unknown': '#f59e0b'
+    };
+
+    // 2. Préparation du conteneur
+    let html = '';
+    boxesContainer.innerHTML = '';
+    let totalConf = 0;
+
+    // 3. On transforme l'objet "scores" en tableau pour boucler dessus
+    // scores est { "marcel": 0.99, "hugues": 0.0001, ... }
+    const entries = Object.entries(apiData.scores);
+    const count = entries.length;
+
+    entries.forEach(([name, score]) => {
+        totalConf += score;
+        const color = couleurs[name.toLowerCase()] || '#64748b';
+        const isPredicted = (name.toLowerCase() === apiData.identite.toLowerCase());
+        const labelProper = name.charAt(0).toUpperCase() + name.slice(1);
+
+        // --- PARTIE GAUCHE : Cartes de résultat (Liste) ---
+        html += `
+        <div class="bg-slate-800/40 rounded-xl p-3 border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
+            <div class="flex items-center justify-between mb-1.5">
+                <span class="text-white text-sm font-semibold flex items-center">
+                    <span class="w-2 h-2 rounded-full mr-2" style="background:${color}"></span>
+                    ${labelProper}
+                </span>
+                <span class="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-700 text-white">${(score * 100).toFixed(0)}%</span>
+            </div>
+            <div class="w-full bg-slate-700 h-1 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-500" style="width: ${score * 100}%; background:${color}"></div>
+            </div>
+        </div>`;
+
+        // --- PARTIE DROITE : Bounding Box (Sur l'image) ---
+        // On n'affiche la boîte qu'une seule fois (pour la personne prédite) 
+        // ou pour tous si tu préfères, ici on suit ta logique :
+        if (isPredicted) {
+            const boxDiv = document.createElement('div');
+            boxDiv.className = 'bounding-box';
+            boxDiv.style.borderColor = color;
+
+            // L'API renvoie des pixels, on les convertit en % par rapport à l'image originale
+            // Attention: cela suppose que ton conteneur de boîte a la même dimension que l'image
+            const info = apiData.face_info;
+            
+            // Si ton API renvoie des coordonnées réelles, on calcule le % (approximatif ici)
+            // Note : Pour la précision, il faudrait diviser par la largeur totale de l'image
+            boxDiv.style.left = (info.x / 40).toFixed(2) + '%'; 
+            boxDiv.style.top = (info.y / 40).toFixed(2) + '%';
+            boxDiv.style.width = (info.w / 40).toFixed(2) + '%';
+            boxDiv.style.height = (info.h / 40).toFixed(2) + '%';
+            
+            boxDiv.style.display = 'block';
+            
+            // On n'affiche le score sur la box QUE pour la personne prédite
+            boxDiv.innerHTML = `
+                <span class="absolute -top-6 left-0 bg-brand-600 text-white text-[10px] px-1.5 py-0.5 rounded-t font-bold whitespace-nowrap">
+                    ${labelProper} ${(score * 100).toFixed(0)}%
+                </span>`;
+            boxesContainer.appendChild(boxDiv);
+        }
+    });
+
+    // 4. Mise à jour de l'interface
+    resultsList.innerHTML = html;
+    document.getElementById('total-count').textContent = count;
+    document.getElementById('avg-confidence').textContent = ((apiData.confiance) * 100).toFixed(1) + '%';
+}
+        
         function showMockResults() {
             // Données fictives générées par le "modèle"
             const mockDetections = [
@@ -837,6 +913,7 @@
                 });
         
                 const data = await response.json();
+                showRealResults(data);
                 console.log("Résultat de l'API :", data);
                 
                 // Exemple d'affichage du résultat
