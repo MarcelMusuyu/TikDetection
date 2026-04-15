@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML — TP</title>
+    
+    <!-- Étape 1: Importation des bibliothèques externes via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Configuration Tailwind pour le thème sombre -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 850: '#151f32', 900: '#0f172a', 950: '#020617' },
+                        brand: { 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7', 900: '#0c4a6e' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Étape 2: Styles personnalisés pour les animations, scrollbars et éléments UI spécifiques -->
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        .scan-line {
+            position: absolute; width: 100%; height: 3px; background: #0ea5e9;
+            box-shadow: 0 0 15px #0ea5e9, 0 0 30px #0ea5e9; top: 0; opacity: 0; z-index: 20;
+        }
+        .scanning .scan-line { opacity: 1; animation: scanAnim 1.5s linear infinite; }
+        @keyframes scanAnim { 0% { top: 0%; } 100% { top: 100%; } }
+
+        .bounding-box {
+            position: absolute; border: 2px solid #38bdf8; background: rgba(56, 189, 248, 0.05);
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.4); pointer-events: none; transition: all 0.3s ease;
+        }
+        .bounding-box:hover { border-color: #fff; background: rgba(56, 189, 248, 0.15); }
+
+        .nav-btn.active { background: linear-gradient(90deg, #0ea5e9 0%, #0284c7 100%); color: white; box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4); }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(51, 65, 85, 0.8); }
+    </style>
+</head>
+<body class="h-screen overflow-hidden flex text-sm">
+
+    <!-- Étape 3: Structure de la barre latérale (Navigation principale) -->
+    <aside class="w-64 bg-slate-850 border-r border-slate-700 flex flex-col shadow-2xl z-30">
+        <div class="h-16 flex items-center px-6 border-b border-slate-700">
+            
+            <span class="text-lg font-bold tracking-wide text-white">ML<span class="text-brand-500">DETECTION</span></span>
+        </div>
+
+        <nav class="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+            <button onclick="switchPage('detection')" class="nav-btn active w-full flex items-center px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200 group">
+                <i class="fa-solid fa-crosshairs w-6 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="font-medium">Détection d'Objets</span>
+            </button>
+            <button onclick="switchPage('classification')" class="nav-btn w-full flex items-center px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200 group">
+                <i class="fa-solid fa-tags w-6 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="font-medium">Classification</span>
+            </button>
+            <button onclick="switchPage('historique')" class="nav-btn w-full flex items-center px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200 group">
+                <i class="fa-solid fa-clock-rotate-left w-6 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="font-medium">Historique & Modèles</span>
+            </button>
+            <button onclick="switchPage('dashboard')" class="nav-btn w-full flex items-center px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200 group">
+                <i class="fa-solid fa-chart-line w-6 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="font-medium">Tableau de Bord</span>
+            </button>
+            <button onclick="switchPage('galerie')" class="nav-btn w-full flex items-center px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200 group">
+                <i class="fa-solid fa-images w-6 text-center group-hover:scale-110 transition-transform"></i>
+                <span class="font-medium">Galerie & Traçabilité</span>
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-700">
+            <button onclick="switchPage('config')" class="nav-btn w-full flex items-center px-4 py-2 rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-all">
+                <i class="fa-solid fa-gear w-6 text-center mr-2"></i>
+                <span>Configuration</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Étape 4: Zone principale de contenu où les pages sont injectées/masquées -->
+    <main class="flex-1 overflow-y-auto relative bg-gradient-to-br from-slate-900 to-slate-950">
+        
+        <!-- ================= PAGE 1: DÉTECTION D'OBJETS ================= -->
+        <div id="page-detection" class="page-container p-6 fade-in space-y-6">
+            <header class="flex justify-between items-end mb-2">
+                <div>
+                    <h1 class="text-2xl font-bold text-white mb-1">Détection d'Objets</h1>
+                    <p class="text-slate-400">Localisation précise des entités avec délimitation spatiale.</p>
+                </div>
+                <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-900/40 text-emerald-400 border border-emerald-700/50">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 inline-block animate-pulse"></span>API Prête
+                </span>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-180px)]">
+                <!-- Zone Gauche: Chargement -->
+                <div class="lg:col-span-3 glass-panel rounded-2xl p-6 flex flex-col justify-center items-center border-dashed border-2 border-slate-600 hover:border-brand-500 transition-colors cursor-pointer relative" id="det-drop-zone">
+                    <input type="file" id="det-file-input" class="absolute inset-0 opacity-0 cursor-pointer" accept="image/*">
+                    <div id="det-upload-prompt" class="text-center space-y-3 pointer-events-none">
+                        <div class="w-14 h-14 bg-slate-800 rounded-full flex items-center justify-center mx-auto text-brand-500">
+                            <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+                        </div>
+                        <p class="text-slate-300 font-medium">Glissez une image ici</p>
+                        <p class="text-xs text-slate-500">PNG, JPG, WEBP • Max 10MB</p>
+                    </div>
+                </div>
+
+                <!-- Zone Centre: Visualisation & Scannage -->
+                <div class="lg:col-span-6 glass-panel rounded-2xl p-4 flex flex-col">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-sm font-semibold text-slate-200"><i class="fa-solid fa-eye mr-2 text-brand-500"></i>Aperçu Traitement</h2>
+                        <button onclick="resetDetection()" class="text-xs text-slate-400 hover:text-white hidden" id="det-reset-btn"><i class="fa-solid fa-rotate mr-1"></i>Reset</button>
+                    </div>
+                    <div class="flex-1 bg-slate-900 rounded-xl overflow-hidden relative flex items-center justify-center border border-slate-800" id="det-canvas-area">
+                        <div id="det-empty-state" class="text-slate-600 text-center"><i class="fa-regular fa-image text-4xl mb-2 block"></i>Aucune image chargée</div>
+                        <div id="det-img-wrapper" class="relative max-w-full max-h-full hidden">
+                            <img id="det-preview" class="max-h-[450px] object-contain rounded-lg shadow-lg">
+                            <div id="det-scan-line" class="scan-line"></div>
+                            <div id="det-boxes" class="absolute inset-0 w-full h-full"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zone Droite: Résultats -->
+                <div class="lg:col-span-3 glass-panel rounded-2xl p-5 flex flex-col">
+                    <h2 class="text-sm font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2"><i class="fa-solid fa-list-check mr-2 text-brand-500"></i>Détections</h2>
+                    <div class="flex-1 overflow-y-auto space-y-3 pr-1" id="det-results-list">
+                        <p class="text-slate-500 text-center mt-8 text-xs">Les résultats apparaîtront ici.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= PAGE 2: CLASSIFICATION ================= -->
+        <div id="page-classification" class="page-container hidden p-6 fade-in space-y-6">
+            <header class="mb-2">
+                <h1 class="text-2xl font-bold text-white mb-1">Classification d'Images</h1>
+                <p class="text-slate-400">Assignation d'une catégorie dominante avec distribution de probabilités.</p>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-180px)]">
+                <div class="glass-panel rounded-2xl p-6 flex flex-col justify-center items-center border-dashed border-2 border-slate-600 hover:border-brand-500 transition-colors cursor-pointer relative" id="cls-drop-zone">
+                    <input type="file" id="cls-file-input" class="absolute inset-0 opacity-0 cursor-pointer" accept="image/*">
+                    <div id="cls-upload-prompt" class="text-center space-y-3 pointer-events-none">
+                        <div class="w-14 h-14 bg-slate-800 rounded-full flex items-center justify-center mx-auto text-violet-500">
+                            <i class="fa-solid fa-layer-group text-2xl"></i>
+                        </div>
+                        <p class="text-slate-300 font-medium">Déposer pour classifier</p>
+                    </div>
+                    <div id="cls-preview-container" class="hidden w-full h-full flex items-center justify-center relative">
+                        <img id="cls-preview" class="max-h-[400px] object-contain rounded-lg shadow-xl">
+                        <div id="cls-scan" class="scan-line"></div>
+                    </div>
+                    <button onclick="resetClassification()" id="cls-reset-btn" class="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1 rounded hidden"><i class="fa-solid fa-rotate-right mr-1"></i>Nouvelle</button>
+                </div>
+
+                <div class="glass-panel rounded-2xl p-6 flex flex-col">
+                    <h2 class="text-sm font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2"><i class="fa-solid fa-chart-bar mr-2 text-violet-500"></i>Probabilités</h2>
+                    <div class="flex-1 flex flex-col justify-center space-y-5" id="cls-results-container">
+                        <div class="text-center text-slate-500 py-10">
+                            <i class="fa-solid fa-wand-magic-sparkles text-4xl mb-3 opacity-30"></i>
+                            <p class="text-xs">En attente d'analyse...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= PAGE 3: HISTORIQUE & MODÈLES ================= -->
+        <div id="page-historique" class="page-container hidden p-6 fade-in space-y-6">
+            <header class="flex justify-between items-end mb-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-white mb-1">Historique & Modèles</h1>
+                    <p class="text-slate-400">Traçabilité des inférences et versions des architectures utilisées.</p>
+                </div>
+                <div class="flex gap-2">
+                    <select id="hist-model-filter" class="bg-slate-800 border border-slate-600 text-white text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-brand-500">
+                        <option value="all">Tous les modèles</option>
+                        <option value="YOLOv8n">YOLOv8n (Vitesse)</option>
+                        <option value="YOLOv8s">YOLOv8s (Équilibré)</option>
+                        <option value="ResNet50">ResNet50 (Classification)</option>
+                    </select>
+                    <button onclick="alert('Export CSV généré')" class="bg-brand-600 hover:bg-brand-500 text-white text-xs px-4 py-2 rounded-lg transition-colors"><i class="fa-solid fa-download mr-1"></i>Exporter</button>
+                </div>
+            </header>
+
+            <div class="glass-panel rounded-2xl overflow-hidden">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-800/50 text-slate-400 text-xs uppercase">
+                        <tr>
+                            <th class="p-4 border-b border-slate-700">ID</th>
+                            <th class="p-4 border-b border-slate-700">Modèle Utilisé</th>
+                            <th class="p-4 border-b border-slate-700">Date & Heure</th>
+                            <th class="p-4 border-b border-slate-700">Résultat Principal</th>
+                            <th class="p-4 border-b border-slate-700">Confiance</th>
+                            <th class="p-4 border-b border-slate-700">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hist-table-body" class="text-sm text-slate-300 divide-y divide-slate-700/50">
+                        <!-- Généré dynamiquement par JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ================= PAGE 4: TABLEAU DE BORD ================= -->
+        <div id="page-dashboard" class="page-container hidden p-6 fade-in space-y-6">
+            <header class="mb-4">
+                <h1 class="text-2xl font-bold text-white mb-1">Tableau de Bord Analytique</h1>
+                <p class="text-slate-400">Métriques de performance, matrices de confusion et rapports globaux.</p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div class="glass-panel p-5 rounded-xl border-l-4 border-blue-500">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider">Précision Globale</p>
+                    <p class="text-3xl font-bold text-white mt-1">96.4%</p>
+                    <p class="text-xs text-emerald-400 mt-2"><i class="fa-solid fa-arrow-trend-up mr-1"></i>+1.2% vs mois dernier</p>
+                </div>
+                <div class="glass-panel p-5 rounded-xl border-l-4 border-violet-500">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider">Images Analysées</p>
+                    <p class="text-3xl font-bold text-white mt-1">14,892</p>
+                    <p class="text-xs text-slate-500 mt-2">Dernier 30 jours</p>
+                </div>
+                <div class="glass-panel p-5 rounded-xl border-l-4 border-amber-500">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider">Temps d'Inférence</p>
+                    <p class="text-3xl font-bold text-white mt-1">24ms</p>
+                    <p class="text-xs text-amber-400 mt-2">GPU Accéléré (CUDA)</p>
+                </div>
+                <div class="glass-panel p-5 rounded-xl border-l-4 border-rose-500">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider">Faux Positifs</p>
+                    <p class="text-3xl font-bold text-white mt-1">89</p>
+                    <p class="text-xs text-rose-400 mt-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>0.6% du total</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <div class="lg:col-span-2 glass-panel p-5 rounded-xl">
+                    <h3 class="text-sm font-semibold text-slate-200 mb-4">Évolution de la Précision (30j)</h3>
+                    <div class="h-64"><canvas id="chart-accuracy"></canvas></div>
+                </div>
+                <div class="glass-panel p-5 rounded-xl">
+                    <h3 class="text-sm font-semibold text-slate-200 mb-4">Matrice de Confusion</h3>
+                    <div class="grid grid-cols-5 gap-1 text-[10px] font-mono">
+                        <div class="col-span-5 text-center text-slate-500 mb-1">Prédit \ Réel</div>
+                        <!-- Header -->
+                        <div></div><div class="text-center text-slate-400">Col</div><div class="text-center text-slate-400">Bus</div><div class="text-center text-slate-400">Per</div><div class="text-center text-slate-400">Véh</div>
+                        <!-- Row 1 -->
+                        <div class="text-right text-slate-400 pr-2">Col</div><div class="bg-emerald-900/50 p-2 rounded text-center text-emerald-300">88</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">2</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">0</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">1</div>
+                        <!-- Row 2 -->
+                        <div class="text-right text-slate-400 pr-2">Bus</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">1</div><div class="bg-emerald-900/50 p-2 rounded text-center text-emerald-300">91</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">2</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">0</div>
+                        <!-- Row 3 -->
+                        <div class="text-right text-slate-400 pr-2">Per</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">0</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">1</div><div class="bg-emerald-900/50 p-2 rounded text-center text-emerald-300">79</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">3</div>
+                        <!-- Row 4 -->
+                        <div class="text-right text-slate-400 pr-2">Véh</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">1</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">0</div><div class="bg-slate-800 p-2 rounded text-center text-slate-400">2</div><div class="bg-emerald-900/50 p-2 rounded text-center text-emerald-300">85</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= PAGE 5: GALERIE & TRAÇABILITÉ ================= -->
+        <div id="page-galerie" class="page-container hidden p-6 fade-in space-y-6">
+            <header class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-4">
+                <div>
+                    <h1 class="text-2xl font-bold text-white mb-1">Galerie & Traçabilité</h1>
+                    <p class="text-slate-400">Archivage sécurisé et consultation rétrospective des analyses.</p>
+                </div>
+                <div class="relative w-full sm:w-72">
+                    <i class="fa-solid fa-search absolute left-3 top-3 text-slate-500 text-xs"></i>
+                    <input type="text" id="gal-search" placeholder="Rechercher (tag, ID, date)..." class="w-full bg-slate-800 border border-slate-600 text-white rounded-lg pl-9 pr-4 py-2 focus:outline-none focus:border-brand-500 transition-colors text-xs">
+                </div>
+            </header>
+
+            <div id="gal-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <!-- Généré dynamiquement -->
+            </div>
+        </div>
+
+        <!-- ================= PAGE 6: CONFIGURATION ================= -->
+        <div id="page-config" class="page-container hidden p-6 fade-in space-y-6 max-w-4xl">
+            <header class="mb-6">
+                <h1 class="text-2xl font-bold text-white mb-1">Configuration Système</h1>
+                <p class="text-slate-400">Ajustement des seuils, paramètres API et sélection des modèles par défaut.</p>
+            </header>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="glass-panel p-6 rounded-xl space-y-6">
+                    <h3 class="text-sm font-semibold text-slate-200 border-b border-slate-700 pb-2">Seuils de Détection</h3>
+                    
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-300">Confiance Minimum</span><span id="cfg-conf-val" class="text-brand-400 font-bold">0.60</span></div>
+                        <input type="range" min="0" max="1" step="0.01" value="0.60" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none accent-brand-500 cursor-pointer" oninput="document.getElementById('cfg-conf-val').textContent=this.value">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-300">IoU Threshold (NMS)</span><span id="cfg-iou-val" class="text-brand-400 font-bold">0.45</span></div>
+                        <input type="range" min="0" max="1" step="0.01" value="0.45" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none accent-brand-500 cursor-pointer" oninput="document.getElementById('cfg-iou-val').textContent=this.value">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-300 mb-2 block">Modèle par défaut (Détection)</label>
+                        <select class="w-full bg-slate-800 border border-slate-600 text-white rounded px-3 py-2 text-xs">
+                            <option>YOLOv8s.pt</option>
+                            <option>YOLOv8m.pt</option>
+                            <option>YOLOv8l.pt</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-6 rounded-xl space-y-6">
+                    <h3 class="text-sm font-semibold text-slate-200 border-b border-slate-700 pb-2">Intégration & Stockage</h3>
+                    <div>
+                        <label class="text-xs text-slate-300 mb-2 block">Endpoint API Backend</label>
+                        <input type="text" value="https://api.neuralvision.local/v2/predict" class="w-full bg-slate-900 border border-slate-600 text-slate-400 rounded px-3 py-2 text-xs font-mono" readonly>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-300 mb-2 block">Clé API Secrète</label>
+                        <input type="password" value="sk_live_51Mk..." class="w-full bg-slate-900 border border-slate-600 text-slate-400 rounded px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div class="flex items-center justify-between pt-2">
+                        <div class="text-xs"><p class="text-slate-300">Mode Maintenance</p><p class="text-slate-500">Bloque l'ingestion des images</p></div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="sr-only peer">
+                            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+                        </label>
+                    </div>
+                    <button class="w-full bg-brand-600 hover:bg-brand-500 text-white py-2 rounded-lg text-xs font-semibold transition-colors shadow-lg shadow-brand-900/40" onclick="alert('Paramètres sauvegardés et appliqués.')">
+                        <i class="fa-solid fa-check mr-2"></i>Sauvegarder
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Étape 5: Modale de détail pour galerie/historique -->
+    <div id="detail-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-200">
+        <div class="bg-slate-850 border border-slate-700 rounded-2xl w-full max-w-3xl overflow-hidden transform scale-95 transition-transform duration-200" id="modal-inner">
+            <div class="flex justify-between items-center p-5 border-b border-slate-700">
+                <h3 class="text-lg font-bold text-white">Détails Analyse <span id="modal-id-txt" class="text-brand-400 ml-1">#---</span></h3>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-full hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-2">
+                    <img id="modal-img" src="" class="max-h-[300px] object-contain rounded-lg shadow-md">
+                </div>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div class="bg-slate-800 p-2 rounded"><span class="text-slate-400 block">Modèle</span><span class="text-white font-medium" id="modal-model">-</span></div>
+                        <div class="bg-slate-800 p-2 rounded"><span class="text-slate-400 block">Date</span><span class="text-white font-medium" id="modal-date">-</span></div>
+                        <div class="bg-slate-800 p-2 rounded"><span class="text-slate-400 block">Confiance</span><span class="text-emerald-400 font-medium" id="modal-conf">-</span></div>
+                        <div class="bg-slate-800 p-2 rounded"><span class="text-slate-400 block">Taille Fichier</span><span class="text-white font-medium" id="modal-size">-</span></div>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 mb-2">Résultats détaillés</p>
+                        <div id="modal-results-list" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Étape 6: Logique JavaScript complète avec commentaires en français -->
+    <script>
+        // --- Étape 6.1: Gestion de la navigation et affichage des pages ---
+        function switchPage(pageId) {
+            // Masquer toutes les pages
+            document.querySelectorAll('.page-container').forEach(el => el.classList.add('hidden'));
+            // Afficher la page cible avec animation
+            document.getElementById('page-' + pageId).classList.remove('hidden');
+            
+            // Mettre à jour le bouton actif dans la sidebar
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            // Recherche du bouton correspondant par attribut onclick (approximation simple)
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                if(btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(pageId)) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Initialiser les graphiques si on va sur le dashboard
+            if(pageId === 'dashboard') initDashboardCharts();
+        }
+
+        // --- Étape 6.2: Initialisation des données simulées pour Historique & Modèles ---
+        const mockHistoryData = [
+            { id: 'TRX-9981', model: 'YOLOv8n', date: '15/04/2026 14:32', result: '3 Véhicules détectés', conf: '94.2%', size: '2.4 MB' },
+            { id: 'TRX-9980', model: 'YOLOv8s', date: '15/04/2026 12:15', result: 'Classification: Chien', conf: '89.5%', size: '1.8 MB' },
+            { id: 'TRX-9979', model: 'ResNet50', date: '14/04/2026 09:45', result: 'Classification: Paysage', conf: '97.1%', size: '3.1 MB' },
+            { id: 'TRX-9978', model: 'YOLOv8n', date: '13/04/2026 18:20', result: '1 Piéton détecté', conf: '76.4%', size: '1.2 MB' },
+            { id: 'TRX-9977', model: 'YOLOv8s', date: '12/04/2026 10:05', result: 'Panneau Signalisation', conf: '91.0%', size: '2.0 MB' }
+        ];
+
+        function renderHistoryTable(filter = 'all') {
+            const tbody = document.getElementById('hist-table-body');
+            tbody.innerHTML = '';
+            
+            const filtered = filter === 'all' ? mockHistoryData : mockHistoryData.filter(h => h.model === filter);
+            
+            filtered.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/40 transition-colors cursor-pointer group';
+                tr.onclick = () => openModalFromHistory(item);
+                tr.innerHTML = `
+                    <td class="p-4 font-mono text-slate-400">${item.id}</td>
+                    <td class="p-4"><span class="bg-slate-700 text-slate-200 px-2 py-1 rounded text-xs font-semibold">${item.model}</span></td>
+                    <td class="p-4 text-slate-300">${item.date}</td>
+                    <td class="p-4 text-slate-300 font-medium">${item.result}</td>
+                    <td class="p-4 text-emerald-400 font-bold">${item.conf}</td>
+                    <td class="p-4"><button class="text-brand-400 hover:text-brand-300 text-xs"><i class="fa-solid fa-eye mr-1"></i>Voir</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('hist-model-filter').addEventListener('change', (e) => {
+            renderHistoryTable(e.target.value);
+        });
+
+        // --- Étape 6.3: Gestion du chargement d'images (Détection) ---
+        const detDrop = document.getElementById('det-drop-zone');
+        const detFileInput = document.getElementById('det-file-input');
+        const detPreview = document.getElementById('det-preview');
+        const detWrapper = document.getElementById('det-img-wrapper');
+        const detEmpty = document.getElementById('det-empty-state');
+        const detScanLine = document.getElementById('det-scan-line');
+        const detResetBtn = document.getElementById('det-reset-btn');
+        const detResultsList = document.getElementById('det-results-list');
+        const detBoxes = document.getElementById('det-boxes');
+        let detFileURL = '';
+
+        function setupDropZone(dropZone, fileInput, processCallback) {
+            dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-brand-500'); });
+            dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.classList.remove('border-brand-500'); });
+            dropZone.addEventListener('drop', e => {
+                e.preventDefault(); dropZone.classList.remove('border-brand-500');
+                if(e.dataTransfer.files.length) processCallback(e.dataTransfer.files[0]);
+            });
+            fileInput.addEventListener('change', e => { if(e.target.files.length) processCallback(e.target.files[0]); });
+        }
+
+        function handleDetectionFile(file) {
+            if(!file.type.startsWith('image/')) return alert('Format image requis.');
+            const reader = new FileReader();
+            reader.onload = e => {
+                detFileURL = e.target.result;
+                detPreview.src = detFileURL;
+                detEmpty.classList.add('hidden');
+                detWrapper.classList.remove('hidden');
+                detResetBtn.classList.remove('hidden');
+                detResultsList.innerHTML = '<div class="text-center text-slate-400 py-8"><i class="fa-solid fa-spinner fa-spin text-xl mb-2 block"></i>Analyse en cours...</div>';
+                detBoxes.innerHTML = '';
+                
+                // Simulation du traitement IA
+                detPreview.parentElement.classList.add('scanning');
+                setTimeout(() => {
+                    detPreview.parentElement.classList.remove('scanning');
+                    generateDetectionResults();
+                }, 1800);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function generateDetectionResults() {
+            const detections = [
+                { label: 'Voiture', conf: 0.98, x: 15, y: 30, w: 60, h: 50 },
+                { label: 'Piéton', conf: 0.87, x: 65, y: 45, w: 20, h: 45 },
+                { label: 'Panneau', conf: 0.76, x: 5, y: 10, w: 15, h: 15 }
+            ];
+            let html = '';
+            let boxesHtml = '';
+            let totalConf = 0;
+
+            detections.forEach(d => {
+                totalConf += d.conf;
+                html += `
+                <div class="bg-slate-800/60 p-3 rounded-lg border border-slate-700">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-white font-medium text-xs">${d.label}</span>
+                        <span class="text-brand-400 text-xs font-bold">${(d.conf*100).toFixed(1)}%</span>
+                    </div>
+                    <div class="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                        <div class="h-full bg-brand-500 rounded-full" style="width:${d.conf*100}%"></div>
+                    </div>
+                </div>`;
+                boxesHtml += `<div class="bounding-box" style="left:${d.x}%;top:${d.y}%;width:${d.w}%;height:${d.h}%">
+                    <span class="absolute -top-5 left-0 bg-brand-600 text-white text-[10px] px-1.5 py-0.5 rounded">${d.label} ${(d.conf*100).toFixed(0)}%</span>
+                </div>`;
+            });
+
+            detResultsList.innerHTML = html;
+            detBoxes.innerHTML = boxesHtml;
+        }
+
+        function resetDetection() {
+            detWrapper.classList.add('hidden'); detEmpty.classList.remove('hidden');
+            detResetBtn.classList.add('hidden'); detFileInput.value = '';
+            detResultsList.innerHTML = '<p class="text-slate-500 text-center mt-8 text-xs">Les résultats apparaîtront ici.</p>';
+            detBoxes.innerHTML = '';
+        }
+
+        setupDropZone(detDrop, detFileInput, handleDetectionFile);
+
+        // --- Étape 6.4: Gestion de la Classification ---
+        const clsDrop = document.getElementById('cls-drop-zone');
+        const clsFileInput = document.getElementById('cls-file-input');
+        const clsPreview = document.getElementById('cls-preview');
+        const clsScan = document.getElementById('cls-scan');
+        const clsResetBtn = document.getElementById('cls-reset-btn');
+        const clsContainer = document.getElementById('cls-preview-container');
+        const clsResults = document.getElementById('cls-results-container');
+        let clsFileURL = '';
+
+        function handleClassificationFile(file) {
+            if(!file.type.startsWith('image/')) return alert('Format image requis.');
+            const reader = new FileReader();
+            reader.onload = e => {
+                clsFileURL = e.target.result;
+                clsPreview.src = clsFileURL;
+                document.getElementById('cls-upload-prompt').classList.add('hidden');
+                clsContainer.classList.remove('hidden');
+                clsResetBtn.classList.remove('hidden');
+                clsResults.innerHTML = '<div class="text-center text-slate-400 py-10"><i class="fa-solid fa-circle-nodes fa-spin text-xl mb-2 block"></i>Extraction des caractéristiques...</div>';
+                
+                clsPreview.parentElement.classList.add('scanning');
+                setTimeout(() => {
+                    clsPreview.parentElement.classList.remove('scanning');
+                    generateClassificationResults();
+                }, 1500);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function generateClassificationResults() {
+            const classes = [
+                { name: 'Voiture de Tourisme', prob: 0.84, color: 'bg-blue-500' },
+                { name: 'SUV / Utilitaire', prob: 0.11, color: 'bg-violet-500' },
+                { name: 'Camionnette', prob: 0.03, color: 'bg-slate-600' },
+                { name: 'Moto', prob: 0.01, color: 'bg-slate-700' },
+                { name: 'Autre', prob: 0.01, color: 'bg-slate-700' }
+            ];
+
+            let html = `<div class="bg-emerald-900/30 border border-emerald-700/50 p-3 rounded-lg text-center mb-4"><p class="text-xs text-emerald-300 mb-1">Classe dominante prédite</p><p class="text-xl font-bold text-white">Voiture de Tourisme</p></div>`;
+            
+            classes.forEach(c => {
+                html += `
+                <div class="space-y-1">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300">${c.name}</span>
+                        <span class="text-slate-400 font-mono">${(c.prob*100).toFixed(1)}%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div class="h-full ${c.color} rounded-full transition-all duration-500" style="width:${c.prob*100}%"></div>
+                    </div>
+                </div>`;
+            });
+            clsResults.innerHTML = html;
+        }
+
+        function resetClassification() {
+            document.getElementById('cls-upload-prompt').classList.remove('hidden');
+            clsContainer.classList.add('hidden'); clsResetBtn.classList.add('hidden');
+            clsFileInput.value = '';
+            clsResults.innerHTML = '<div class="text-center text-slate-500 py-10"><i class="fa-solid fa-wand-magic-sparkles text-4xl mb-3 opacity-30"></i><p class="text-xs">En attente d\'analyse...</p></div>';
+        }
+
+        setupDropZone(clsDrop, clsFileInput, handleClassificationFile);
+
+        // --- Étape 6.5: Galerie & Recherche ---
+        const galleryData = [
+            { id: 'G-001', date: '10/04/2026', model: 'YOLOv8n', tags: ['Route', 'Urbain'], conf: '94%' },
+            { id: 'G-002', date: '09/04/2026', model: 'ResNet50', tags: ['Nature', 'Forêt'], conf: '88%' },
+            { id: 'G-003', date: '08/04/2026', model: 'YOLOv8s', tags: ['Industrie', 'Nuit'], conf: '91%' },
+            { id: 'G-004', date: '07/04/2026', model: 'YOLOv8n', tags: ['Aéroport', 'Avion'], conf: '96%' },
+            { id: 'G-005', date: '05/04/2026', model: 'ResNet50', tags: ['Véhicule', 'Rouge'], conf: '82%' }
+        ];
+
+        function renderGallery(filter = '') {
+            const grid = document.getElementById('gal-grid');
+            grid.innerHTML = '';
+            const filtered = galleryData.filter(i => JSON.stringify(i).toLowerCase().includes(filter.toLowerCase()));
+            
+            filtered.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'glass-panel rounded-xl overflow-hidden hover:scale-[1.02] transition-transform cursor-pointer group';
+                card.onclick = () => openModalFromGallery(item);
+                card.innerHTML = `
+                    <div class="h-32 bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center relative overflow-hidden">
+                        <i class="fa-solid fa-image text-4xl text-slate-500 group-hover:text-brand-400 transition-colors"></i>
+                        <div class="absolute top-2 right-2 bg-black/60 backdrop-blur text-white text-[10px] px-1.5 py-0.5 rounded">${item.model}</div>
+                    </div>
+                    <div class="p-3">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-white font-bold text-xs">${item.id}</span>
+                            <span class="text-emerald-400 text-xs font-bold">${item.conf}</span>
+                        </div>
+                        <p class="text-slate-500 text-[10px]">${item.date}</p>
+                        <div class="flex gap-1 mt-2 flex-wrap">
+                            ${item.tags.map(t => `<span class="text-[9px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">${t}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        document.getElementById('gal-search').addEventListener('input', e => renderGallery(e.target.value));
+
+        // --- Étape 6.6: Modale de détails ---
+        function openModalFromHistory(item) {
+            document.getElementById('modal-id-txt').textContent = '#' + item.id;
+            document.getElementById('modal-model').textContent = item.model;
+            document.getElementById('modal-date').textContent = item.date;
+            document.getElementById('modal-conf').textContent = item.conf;
+            document.getElementById('modal-size').textContent = item.size;
+            document.getElementById('modal-img').src = 'https://via.placeholder.com/400x300/1e293b/334155?text=' + encodeURIComponent(item.result);
+            document.getElementById('modal-results-list').innerHTML = `<div class="p-3 bg-slate-800 rounded text-xs text-slate-300 border-l-2 border-brand-500">${item.result}</div>`;
+            showModal();
+        }
+
+        function openModalFromGallery(item) {
+            document.getElementById('modal-id-txt').textContent = '#' + item.id;
+            document.getElementById('modal-model').textContent = item.model;
+            document.getElementById('modal-date').textContent = item.date;
+            document.getElementById('modal-conf').textContent = item.conf;
+            document.getElementById('modal-size').textContent = '2.1 MB';
+            document.getElementById('modal-img').src = 'https://via.placeholder.com/400x300/1e293b/334155?text=' + encodeURIComponent(item.tags.join('+'));
+            document.getElementById('modal-results-list').innerHTML = `<div class="p-3 bg-slate-800 rounded text-xs text-slate-300 border-l-2 border-brand-500">Tags: ${item.tags.join(', ')} | Classification OK</div>`;
+            showModal();
+        }
+
+        function showModal() {
+            const m = document.getElementById('detail-modal');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.remove('opacity-0'); document.getElementById('modal-inner').classList.remove('scale-95'); document.getElementById('modal-inner').classList.add('scale-100'); }, 10);
+        }
+
+        function closeModal() {
+            const m = document.getElementById('detail-modal');
+            m.classList.add('opacity-0'); document.getElementById('modal-inner').classList.add('scale-95'); document.getElementById('modal-inner').classList.remove('scale-100');
+            setTimeout(() => m.classList.add('hidden'), 200);
+        }
+        document.getElementById('detail-modal').addEventListener('click', e => { if(e.target.id === 'detail-modal') closeModal(); });
+
+        // --- Étape 6.7: Initialisation des graphiques du Dashboard ---
+        let chartInstance = null;
+        function initDashboardCharts() {
+            if(chartInstance) return; // Éviter la recréation
+            const ctx = document.getElementById('chart-accuracy').getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, 'rgba(14, 165, 233, 0.4)');
+            gradient.addColorStop(1, 'rgba(14, 165, 233, 0)');
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 10}, (_, i) => `${10-i}j`),
+                    datasets: [{
+                        label: 'Précision',
+                        data: [93.2, 94.1, 94.5, 93.8, 95.0, 95.2, 94.9, 95.8, 96.1, 96.4],
+                        borderColor: '#0ea5e9', backgroundColor: gradient, fill: true, tension: 0.4, borderWidth: 2, pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e293b', titleColor: '#fff', bodyColor: '#cbd5e1', borderColor: '#334155', borderWidth: 1 } },
+                    scales: { x: { grid: { color: '#334155', borderDash: [5, 5] }, ticks: { color: '#94a3b8' } }, y: { min: 90, max: 100, grid: { color: '#334155', borderDash: [5, 5] }, ticks: { color: '#94a3b8' } } }
+                }
+            });
+        }
+
+        // --- Étape 6.8: Initialisation globale au chargement ---
+        document.addEventListener('DOMContentLoaded', () => {
+            renderHistoryTable();
+            renderGallery();
+            // Afficher la page détection par défaut
+            switchPage('detection');
+        });
+    </script>
+</body>
+</html>
+
