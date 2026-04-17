@@ -68,7 +68,7 @@
                 <span class="font-medium">Détection d'Objets</span>
             </button>
             <button onclick="switchPage('classification')" class="nav-btn w-full flex items-center px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200 group">
-                <i class="fa-solid fa-tags w-6 text-center group-hover:scale-110 transition-transform"></i>
+                <i class="fa-solid fa-solid fa-layer-group w-6 text-center group-hover:scale-110 transition-transform"></i>
                 <span class="font-medium">Classification</span>
             </button>
             <button onclick="switchPage('historique')" class="nav-btn w-full flex items-center px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200 group">
@@ -462,47 +462,91 @@
                 detResetBtn.classList.remove('hidden');
                 detResultsList.innerHTML = '<div class="text-center text-slate-400 py-8"><i class="fa-solid fa-spinner fa-spin text-xl mb-2 block"></i>Analyse en cours...</div>';
                 detBoxes.innerHTML = '';
+                // 1. On attend le résultat REEL de l'API avec await
+               
                 
                 // Simulation du traitement IA
                 detPreview.parentElement.classList.add('scanning');
-                setTimeout(() => {
-                    detPreview.parentElement.classList.remove('scanning');
-                    generateDetectionResults();
+                setTimeout(async () => { // <--- Ajoute 'async' ici
+                    try {
+                        // 1. On attend le résultat REEL de l'API avec await
+                        const data = await detectionEtAfficher(file); 
+                        
+                        // 2. On arrête l'animation de scan
+                        detPreview.parentElement.classList.remove('scanning');
+                        
+                        // 3. On envoie les données réelles (pas la promesse) à l'affichage
+                        renderApiOutput(data);
+                        
+                    } catch (error) {
+                        console.error("Erreur lors de l'appel API:", error);
+                        detResultsList.innerHTML = '<div class="text-red-400 text-xs">Erreur de connexion</div>';
+                        detPreview.parentElement.classList.remove('scanning');
+                    }
                 }, 1800);
             };
             reader.readAsDataURL(file);
-            classifierEtAfficher(file);
         }
 
-        function generateDetectionResults() {
-            const detections = [
-                { label: 'Voiture', conf: 0.98, x: 15, y: 30, w: 60, h: 50 },
-                { label: 'Piéton', conf: 0.87, x: 65, y: 45, w: 20, h: 45 },
-                { label: 'Panneau', conf: 0.76, x: 5, y: 10, w: 15, h: 15 }
-            ];
-            let html = '';
-            let boxesHtml = '';
-            let totalConf = 0;
+        function generateClassificationResults(apiData) {
+                // 1. Protection contre les données corrompues ou incomplètes
+                    if (!apiData || typeof apiData !== 'object' || !apiData.scores) {
+                        console.error("Format de données invalide reçu:", apiData);
+                        return;
+                    }
+                    // 1. Récupération des éléments du DOM
+                const detResultsList = document.getElementById('det-results-list'); // Ta liste à gauche
+                const detBoxes = document.getElementById('det-boxes');             // Ton conteneur sur l'image
 
-            detections.forEach(d => {
-                totalConf += d.conf;
-                html += `
-                <div class="bg-slate-800/60 p-3 rounded-lg border border-slate-700">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-white font-medium text-xs">${d.label}</span>
-                        <span class="text-brand-400 text-xs font-bold">${(d.conf*100).toFixed(1)}%</span>
-                    </div>
-                    <div class="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                        <div class="h-full bg-brand-500 rounded-full" style="width:${d.conf*100}%"></div>
-                    </div>
-                </div>`;
-                boxesHtml += `<div class="bounding-box" style="left:${d.x}%;top:${d.y}%;width:${d.w}%;height:${d.h}%">
-                    <span class="absolute -top-5 left-0 bg-brand-600 text-white text-[10px] px-1.5 py-0.5 rounded">${d.label} ${(d.conf*100).toFixed(0)}%</span>
-                </div>`;
-            });
+                let html = '';
+                let boxesHtml = '';
 
-            detResultsList.innerHTML = html;
-            detBoxes.innerHTML = boxesHtml;
+                // 2. Générer la liste des scores (Marcel, Hugues, Jemima)
+                // On boucle sur l'objet "scores" renvoyé par l'API
+                Object.entries(apiData.scores).forEach(([name, score]) => {
+                    const labelProper = name.charAt(0).toUpperCase() + name.slice(1);
+                    
+                    html += `
+                    <div class="bg-slate-800/60 p-3 rounded-lg border border-slate-700">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-white font-medium text-xs">${labelProper}</span>
+                            <span class="text-brand-400 text-xs font-bold">${(score * 100).toFixed(1)}%</span>
+                        </div>
+                        <div class="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                            <div class="h-full bg-brand-500 rounded-full transition-all duration-700" style="width:${score * 100}%"></div>
+                        </div>
+                    </div>`;
+                });
+
+                // 3. Générer la Bounding Box unique pour le visage détecté
+                if (apiData.face_info) {
+                    const info = apiData.face_info;
+                    const identity = apiData.identite.charAt(0).toUpperCase() + apiData.identite.slice(1);
+                    const confidence = (apiData.confiance * 100).toFixed(0);
+
+                    // --- CALCUL DES POURCENTAGES ---
+                    // L'API renvoie des pixels. Pour que ça marche en %, on estime par rapport 
+                    // à l'image. Note: l'idéal est de diviser par la taille réelle de l'image.
+                    // Ici, j'utilise une approximation basée sur ton crop_x2 (largeur totale estimée)
+                    const totalW = info.crop_x2 || 1000; 
+                    const totalH = info.crop_y2 || 1000;
+
+                    const left = (info.x / totalW * 100).toFixed(2);
+                    const top = (info.y / totalH * 100).toFixed(2);
+                    const width = (info.w / totalW * 100).toFixed(2);
+                    const height = (info.h / totalH * 100).toFixed(2);
+
+                    boxesHtml = `
+                    <div class="bounding-box" style="left:${left}%; top:${top}%; width:${width}%; height:${height}%; border: 2px solid #0ea5e9; position: absolute;">
+                        <span class="absolute -top-5 left-0 bg-brand-600 text-white text-[10px] px-1.5 py-0.5 rounded shadow-lg whitespace-nowrap">
+                            ${identity} ${confidence}%
+                        </span>
+                    </div>`;
+
+                    // IMPORTANT : Injecter le résultat dans le DOM
+                    document.getElementById('det-results-list').innerHTML = html;
+                    document.getElementById('det-boxes').innerHTML = boxesHtml;
+            }
         }
 
         function resetDetection() {
@@ -536,39 +580,85 @@
                 clsResults.innerHTML = '<div class="text-center text-slate-400 py-10"><i class="fa-solid fa-circle-nodes fa-spin text-xl mb-2 block"></i>Extraction des caractéristiques...</div>';
                 
                 clsPreview.parentElement.classList.add('scanning');
-                setTimeout(() => {
-                    clsPreview.parentElement.classList.remove('scanning');
-                    generateClassificationResults();
-                }, 1500);
+               
+                 setTimeout(async () => { // <--- Ajoute 'async' ici
+                    try {
+                        // 1. On attend le résultat REEL de l'API avec await
+                        const data = await classifierEtAfficher(file); 
+                        
+                        // 2. On arrête l'animation de scan
+                       clsPreview.parentElement.classList.remove('scanning');
+                        
+                        // 3. On envoie les données réelles (pas la promesse) à l'affichage
+                       renderApiOutput(data);
+                        
+                    } catch (error) {
+                        console.error("Erreur lors de l'appel API:", error);
+                        detResultsList.innerHTML = '<div class="text-red-400 text-xs">Erreur de connexion</div>';
+                        detPreview.parentElement.classList.remove('scanning');
+                    }
+                }, 1800);
             };
             reader.readAsDataURL(file);
         }
 
-        function generateClassificationResults() {
-            const classes = [
-                { name: 'Voiture de Tourisme', prob: 0.84, color: 'bg-blue-500' },
-                { name: 'SUV / Utilitaire', prob: 0.11, color: 'bg-violet-500' },
-                { name: 'Camionnette', prob: 0.03, color: 'bg-slate-600' },
-                { name: 'Moto', prob: 0.01, color: 'bg-slate-700' },
-                { name: 'Autre', prob: 0.01, color: 'bg-slate-700' }
-            ];
+        function generateDetectionResults(apiData) {
+                        // 1. Vérification de sécurité pour le format "combined"
+                if (!apiData || !apiData.classification) {
+                    console.error("Données de classification manquantes", apiData);
+                    return;
+                }
 
-            let html = `<div class="bg-emerald-900/30 border border-emerald-700/50 p-3 rounded-lg text-center mb-4"><p class="text-xs text-emerald-300 mb-1">Classe dominante prédite</p><p class="text-xl font-bold text-white">Voiture de Tourisme</p></div>`;
-            
-            classes.forEach(c => {
-                html += `
-                <div class="space-y-1">
-                    <div class="flex justify-between text-xs">
-                        <span class="text-slate-300">${c.name}</span>
-                        <span class="text-slate-400 font-mono">${(c.prob*100).toFixed(1)}%</span>
-                    </div>
-                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                        <div class="h-full ${c.color} rounded-full transition-all duration-500" style="width:${c.prob*100}%"></div>
-                    </div>
-                </div>`;
-            });
-            clsResults.innerHTML = html;
-        }
+                const classif = apiData.classification;
+                const scores = classif.scores;
+                            // 2. Cibler le BON ID (celui que tu viens de me donner)
+                const clsResults = document.getElementById('cls-results-container');
+                
+                if (!clsResults) {
+                    console.error("L'élément 'cls-results-container' n'a pas été trouvé dans le HTML.");
+                    return;
+                }
+
+                // 2. Couleurs pour les barres de progression
+                const colorMap = {
+                    'marcel': 'bg-blue-500',
+                    'hugues': 'bg-violet-500',
+                    'jemima': 'bg-emerald-500',
+                    'default': 'bg-slate-600'
+                };
+
+                // 3. Header : Classe dominante prédite
+                const identityFixed = classif.identite.charAt(0).toUpperCase() + classif.identite.slice(1);
+                const mainConf = (classif.confiance * 100).toFixed(1);
+
+                let html = `
+                    <div class="bg-emerald-900/30 border border-emerald-700/50 p-3 rounded-lg text-center mb-4">
+                        <p class="text-xs text-emerald-300 mb-1">Identité dominante prédite</p>
+                        <p class="text-xl font-bold text-white">${identityFixed}</p>
+                        <p class="text-[10px] text-emerald-400 font-mono">${mainConf}% de confiance</p>
+                    </div>`;
+
+                // 4. Liste des probabilités dynamiques
+                Object.entries(scores).forEach(([name, prob]) => {
+                    const label = name.charAt(0).toUpperCase() + name.slice(1);
+                    const percent = (prob * 100).toFixed(1);
+                    const color = colorMap[name.toLowerCase()] || colorMap['default'];
+
+                    html += `
+                    <div class="space-y-1 mb-3">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-300">${label}</span>
+                            <span class="text-slate-400 font-mono">${percent}%</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div class="h-full ${color} rounded-full transition-all duration-700" 
+                                style="width:${percent}%"></div>
+                        </div>
+                    </div>`;
+                });
+
+                clsResults.innerHTML = html;      
+  }
 
         function resetClassification() {
             document.getElementById('cls-upload-prompt').classList.remove('hidden');
@@ -682,89 +772,130 @@
             });
         }
 
-        // --- Étape 6.8: Initialisation globale au chargement ---
-        document.addEventListener('DOMContentLoaded', () => {
-            renderHistoryTable();
-            renderGallery();
-            // Afficher la page détection par défaut
-            switchPage('detection');
-        });
 
-        function showRealResults(apiData) {
-    // 1. Définition des couleurs pour chaque personne
-                const couleurs = {
-                    'marcel': '#0ea5e9',
-                    'hugues': '#a855f7',
-                    'jemima': '#22c55e',
-                    'unknown': '#f59e0b'
-                };
-            
-                // 2. Préparation du conteneur
-                let html = '';
-                boxesContainer.innerHTML = '';
-                let totalConf = 0;
-            
-                // 3. On transforme l'objet "scores" en tableau pour boucler dessus
-                // scores est { "marcel": 0.99, "hugues": 0.0001, ... }
-                const entries = Object.entries(apiData.scores);
-                const count = entries.length;
-            
-                entries.forEach(([name, score]) => {
-                    totalConf += score;
-                    const color = couleurs[name.toLowerCase()] || '#64748b';
-                    const isPredicted = (name.toLowerCase() === apiData.identite.toLowerCase());
-                    const labelProper = name.charAt(0).toUpperCase() + name.slice(1);
-            
-                    // --- PARTIE GAUCHE : Cartes de résultat (Liste) ---
-                    html += `
-                    <div class="bg-slate-800/40 rounded-xl p-3 border border-slate-700/50 hover:bg-slate-800/60 transition-colors">
-                        <div class="flex items-center justify-between mb-1.5">
-                            <span class="text-white text-sm font-semibold flex items-center">
-                                <span class="w-2 h-2 rounded-full mr-2" style="background:${color}"></span>
-                                ${labelProper}
-                            </span>
-                            <span class="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-700 text-white">${(score * 100).toFixed(0)}%</span>
-                        </div>
-                        <div class="w-full bg-slate-700 h-1 rounded-full overflow-hidden">
-                            <div class="h-full rounded-full transition-all duration-500" style="width: ${score * 100}%; background:${color}"></div>
-                        </div>
-                    </div>`;
-            
-                    // --- PARTIE DROITE : Bounding Box (Sur l'image) ---
-                    // On n'affiche la boîte qu'une seule fois (pour la personne prédite) 
-                    // ou pour tous si tu préfères, ici on suit ta logique :
-                    if (isPredicted) {
-                        const boxDiv = document.createElement('div');
-                        boxDiv.className = 'bounding-box';
-                        boxDiv.style.borderColor = color;
-            
-                        // L'API renvoie des pixels, on les convertit en % par rapport à l'image originale
-                        // Attention: cela suppose que ton conteneur de boîte a la même dimension que l'image
-                        const info = apiData.face_info;
-                        
-                        // Si ton API renvoie des coordonnées réelles, on calcule le % (approximatif ici)
-                        // Note : Pour la précision, il faudrait diviser par la largeur totale de l'image
-                        boxDiv.style.left = (info.x / 40).toFixed(2) + '%'; 
-                        boxDiv.style.top = (info.y / 40).toFixed(2) + '%';
-                        boxDiv.style.width = (info.w / 40).toFixed(2) + '%';
-                        boxDiv.style.height = (info.h / 40).toFixed(2) + '%';
-                        
-                        boxDiv.style.display = 'block';
-                        
-                        // On n'affiche le score sur la box QUE pour la personne prédite
-                        boxDiv.innerHTML = `
-                            <span class="absolute -top-6 left-0 bg-brand-600 text-white text-[10px] px-1.5 py-0.5 rounded-t font-bold whitespace-nowrap">
-                                ${labelProper} ${(score * 100).toFixed(0)}%
-                            </span>`;
-                        boxesContainer.appendChild(boxDiv);
-                    }
+        
+            function renderApiOutput(apiData) {
+                            if (!apiData) return;
+
+                            // --- 1. RÉCUPÉRATION DES ÉLÉMENTS DU DOM ---
+                            const clsResults = document.getElementById('cls-results-container');
+                            const detResultsList = document.getElementById('det-results-list');
+                            const detBoxes = document.getElementById('det-boxes');
+
+                            // Initialisation des variables de construction
+                            let listHtml = '';
+                            let boxesHtml = '';
+                            
+                            const colorMap = {
+                                'marcel': 'bg-blue-500',
+                                'hugues': 'bg-violet-500',
+                                'jemima': 'bg-emerald-500',
+                                'unknown': 'bg-amber-500',
+                                'default': 'bg-slate-600'
+                            };
+
+                            // --- CAS A : CLASSIFICATION (Un seul visage recadré) ---
+                            if (apiData.type === "classification") {
+                                const identity = apiData.identite.charAt(0).toUpperCase() + apiData.identite.slice(1);
+                                const mainConf = (apiData.confiance * 100).toFixed(1);
+
+                                // Header pour le bloc de classification
+                                listHtml = `
+                                    <div class="bg-emerald-900/30 border border-emerald-700/50 p-3 rounded-lg text-center mb-4">
+                                        <p class="text-xs text-emerald-300 mb-1">Identité prédite</p>
+                                        <p class="text-xl font-bold text-white">${identity}</p>
+                                        <p class="text-[10px] text-emerald-400 font-mono">${mainConf}% de confiance</p>
+                                    </div>`;
+
+                                // Barres de scores
+                                Object.entries(apiData.scores).forEach(([name, prob]) => {
+                                    const label = name.charAt(0).toUpperCase() + name.slice(1);
+                                    const percent = (prob * 100).toFixed(1);
+                                    const color = colorMap[name.toLowerCase()] || colorMap['default'];
+
+                                    listHtml += `
+                                        <div class="space-y-1 mb-3">
+                                            <div class="flex justify-between text-xs">
+                                                <span class="text-slate-300">${label}</span>
+                                                <span class="text-slate-400 font-mono">${percent}%</span>
+                                            </div>
+                                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                <div class="h-full ${color} rounded-full transition-all duration-700" style="width:${percent}%"></div>
+                                            </div>
+                                        </div>`;
+                                });
+
+                                // Bounding Box (si infos dispos)
+                                // Injection EXCLUSIVE dans le bloc classification
+                                 if (clsResults) clsResults.innerHTML = listHtml;
+                                if (apiData.face_info) {
+                                    const info = apiData.face_info;
+                                    const totalW = info.crop_x2 || 1000;
+                                    const totalH = info.crop_y2 || 1000;
+                                    
+                                    boxesHtml = `
+                                        <div class="bounding-box" style="left:${(info.x/totalW*100).toFixed(2)}%; top:${(info.y/totalH*100).toFixed(2)}%; width:${(info.w/totalW*100).toFixed(2)}%; height:${(info.h/totalH*100).toFixed(2)}%; border: 2px solid #10b981; position: absolute;">
+                                            <span class="absolute -top-5 left-0 bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded shadow-lg whitespace-nowrap">
+                                                ${identity} ${mainConf}%
+                                            </span>
+                                        </div>`;
+                                }
+                            }else if (apiData.type === "detection") {
+                                listHtml = `
+                                    <div class="bg-blue-900/30 border border-blue-700/50 p-3 rounded-lg text-center mb-4">
+                                        <p class="text-xs text-blue-300 mb-1">Analyse Multi-Visages</p>
+                                        <p class="text-xl font-bold text-white">${apiData.count} Détection(s)</p>
+                                    </div>`;
+
+                                apiData.detections.forEach((det, index) => {
+                                    const label = det.label.charAt(0).toUpperCase() + det.label.slice(1);
+                                    const percent = (det.confidence * 100).toFixed(1);
+                                    const colorClass = colorMap[det.label.toLowerCase()] || colorMap['default'];
+                                    const hexColor = det.label === 'marcel' ? '#0ea5e9' : (det.label === 'jemima' ? '#10b981' : '#f59e0b');
+
+                                    // Liste à gauche
+                                    listHtml += `
+                                        <div class="space-y-1 mb-4 p-2 rounded-md bg-slate-800/20 border border-slate-700/30">
+                                            <div class="flex justify-between text-xs items-center">
+                                                <span class="text-slate-200">${label} #${index+1}</span>
+                                                <span class="text-brand-400 font-mono font-bold">${percent}%</span>
+                                            </div>
+                                            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                                <div class="h-full ${colorClass} rounded-full" style="width:${percent}%"></div>
+                                            </div>
+                                        </div>`;
+
+                                    // Boîtes sur l'image (Estimation ratio 4000x3000 pour tes coordonnées)
+                                    const [x1, y1, x2, y2] = det.bbox;
+                                    const wImg = 4500, hImg = 3500; // Ajuste selon la taille réelle de ton image
+                                    
+                                    boxesHtml += `
+                                        <div class="bounding-box" style="left:${(x1/wImg*100).toFixed(2)}%; top:${(y1/hImg*100).toFixed(2)}%; width:${((x2-x1)/wImg*100).toFixed(2)}%; height:${((y2-y1)/hImg*100).toFixed(2)}%; border: 2px solid ${hexColor}; position: absolute;">
+                                            <span class="absolute -top-5 left-0 text-white text-[9px] px-1 rounded font-bold" style="background:${hexColor}">
+                                                ${label}
+                                            </span>
+                                        </div>`;
+                                });
+                                // Injection EXCLUSIVE dans le bloc détection
+                                 if (detResultsList) detResultsList.innerHTML = listHtml;
+                            }
+
+                            // --- 2. INJECTION FINALE DANS LES DEUX BLOCS ---
+                    
+                         
+                            
+                            // On injecte toujours les boîtes sur l'image
+                            if (detBoxes) detBoxes.innerHTML = boxesHtml;
+            }
+
+
+                // --- Étape 6.8: Initialisation globale au chargement ---
+                document.addEventListener('DOMContentLoaded', () => {
+                    renderHistoryTable();
+                    renderGallery();
+                    // Afficher la page détection par défaut
+                    switchPage('detection');
                 });
-
-            // 4. Mise à jour de l'interface
-            resultsList.innerHTML = html;
-            document.getElementById('total-count').textContent = count;
-            document.getElementById('avg-confidence').textContent = ((apiData.confiance) * 100).toFixed(1) + '%';
-    }
 
         async function classifierEtAfficher(file) {
             const url = 'https://nyembo-face-recognition-api.hf.space/classify';
@@ -776,15 +907,31 @@
                     method: 'POST',
                     body: formData
                 });
-        
+
                 const apiData = await response.json();
                 
-                // On transforme la réponse de l'API pour ton interface
-                const nouvellesDetections = formaterDonneesClassification(apiData);
+                return apiData;
+
+            } catch (error) {
+                console.error("Erreur API:", error);
+            }
+        }
+
+         async function detectionEtAfficher(file) {
+            const url = 'https://nyembo-face-recognition-api.hf.space/detect';
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const apiData = await response.json();
                 
-                // On appelle ta fonction d'affichage avec les vraies données
-                renderDetections(nouvellesDetections);
-        
+                return apiData;
+
             } catch (error) {
                 console.error("Erreur API:", error);
             }
