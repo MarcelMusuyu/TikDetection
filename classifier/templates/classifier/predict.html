@@ -774,121 +774,104 @@
 
 
         
-            function renderApiOutput(apiData) {
-                            if (!apiData) return;
+           function renderApiOutput(apiData) {
+    if (!apiData) return;
 
-                            // --- 1. RÉCUPÉRATION DES ÉLÉMENTS DU DOM ---
-                            const clsResults = document.getElementById('cls-results-container');
-                            const detResultsList = document.getElementById('det-results-list');
-                            const detBoxes = document.getElementById('det-boxes');
+    // --- 1. RÉCUPÉRATION DES ÉLÉMENTS DU DOM ---
+    const clsResults = document.getElementById('cls-results-container');
+    const detResultsList = document.getElementById('det-results-list');
+    const detBoxes = document.getElementById('det-boxes');
+    const imageDisplay = document.getElementById('imageDisplay'); // L'ID de votre balise <img> principale
 
-                            // Initialisation des variables de construction
-                            let listHtml = '';
-                            let boxesHtml = '';
-                            
-                            const colorMap = {
-                                'marcel': 'bg-blue-500',
-                                'hugues': 'bg-violet-500',
-                                'jemima': 'bg-emerald-500',
-                                'unknown': 'bg-amber-500',
-                                'default': 'bg-slate-600'
-                            };
+    // Initialisation
+    let listHtml = '';
+    let boxesHtml = '';
+    
+    const colorMap = {
+        'marcel': 'bg-blue-500',
+        'hugues': 'bg-violet-500',
+        'jemima': 'bg-emerald-500',
+        'unknown': 'bg-amber-500',
+        'default': 'bg-slate-600'
+    };
 
-                            // --- CAS A : CLASSIFICATION (Un seul visage recadré) ---
-                            if (apiData.type === "classification") {
-                                const identity = apiData.identite.charAt(0).toUpperCase() + apiData.identite.slice(1);
-                                const mainConf = (apiData.confiance * 100).toFixed(1);
+    // --- MISE À JOUR DE L'IMAGE (La version avec les cadres du serveur) ---
+    if (apiData.annotated_image && imageDisplay) {
+        imageDisplay.src = apiData.annotated_image;
+    }
 
-                                // Header pour le bloc de classification
-                                listHtml = `
-                                    <div class="bg-emerald-900/30 border border-emerald-700/50 p-3 rounded-lg text-center mb-4">
-                                        <p class="text-xs text-emerald-300 mb-1">Identité prédite</p>
-                                        <p class="text-xl font-bold text-white">${identity}</p>
-                                        <p class="text-[10px] text-emerald-400 font-mono">${mainConf}% de confiance</p>
-                                    </div>`;
+    // --- CAS A : CLASSIFICATION ---
+    if (apiData.type === "classification") {
+        const identity = apiData.identite.charAt(0).toUpperCase() + apiData.identite.slice(1);
+        const mainConf = (apiData.confiance * 100).toFixed(1);
 
-                                // Barres de scores
-                                Object.entries(apiData.scores).forEach(([name, prob]) => {
-                                    const label = name.charAt(0).toUpperCase() + name.slice(1);
-                                    const percent = (prob * 100).toFixed(1);
-                                    const color = colorMap[name.toLowerCase()] || colorMap['default'];
+        listHtml = `
+            <div class="bg-emerald-900/30 border border-emerald-700/50 p-3 rounded-lg text-center mb-4">
+                <p class="text-xs text-emerald-300 mb-1">Identité prédite</p>
+                <p class="text-xl font-bold text-white">${identity}</p>
+                <p class="text-[10px] text-emerald-400 font-mono">${mainConf}% de confiance</p>
+            </div>`;
 
-                                    listHtml += `
-                                        <div class="space-y-1 mb-3">
-                                            <div class="flex justify-between text-xs">
-                                                <span class="text-slate-300">${label}</span>
-                                                <span class="text-slate-400 font-mono">${percent}%</span>
-                                            </div>
-                                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                                <div class="h-full ${color} rounded-full transition-all duration-700" style="width:${percent}%"></div>
-                                            </div>
-                                        </div>`;
-                                });
+        if (apiData.scores) {
+            Object.entries(apiData.scores).forEach(([name, prob]) => {
+                const label = name.charAt(0).toUpperCase() + name.slice(1);
+                const percent = (prob * 100).toFixed(1);
+                const color = colorMap[name.toLowerCase()] || colorMap['default'];
+                listHtml += `
+                    <div class="space-y-1 mb-3">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-300">${label}</span>
+                            <span class="text-slate-400 font-mono">${percent}%</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div class="h-full ${color} rounded-full" style="width:${percent}%"></div>
+                        </div>
+                    </div>`;
+            });
+        }
+        if (clsResults) clsResults.innerHTML = listHtml;
 
-                                // Bounding Box (si infos dispos)
-                                // Injection EXCLUSIVE dans le bloc classification
-                                 if (clsResults) clsResults.innerHTML = listHtml;
-                                if (apiData.face_info) {
-                                    const info = apiData.face_info;
-                                    const totalW = info.crop_x2 || 1000;
-                                    const totalH = info.crop_y2 || 1000;
-                                    
-                                    boxesHtml = `
-                                        <div class="bounding-box" style="left:${(info.x/totalW*100).toFixed(2)}%; top:${(info.y/totalH*100).toFixed(2)}%; width:${(info.w/totalW*100).toFixed(2)}%; height:${(info.h/totalH*100).toFixed(2)}%; border: 2px solid #10b981; position: absolute;">
-                                            <span class="absolute -top-5 left-0 bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded shadow-lg whitespace-nowrap">
-                                                ${identity} ${mainConf}%
-                                            </span>
-                                        </div>`;
-                                }
-                            }else if (apiData.type === "detection") {
-                                listHtml = `
-                                    <div class="bg-blue-900/30 border border-blue-700/50 p-3 rounded-lg text-center mb-4">
-                                        <p class="text-xs text-blue-300 mb-1">Analyse Multi-Visages</p>
-                                        <p class="text-xl font-bold text-white">${apiData.count} Détection(s)</p>
-                                    </div>`;
+    } 
+    // --- CAS B : DETECTION (C'est ici que l'erreur se produisait) ---
+    else if (apiData.type === "detection") {
+        listHtml = `
+            <div class="bg-blue-900/30 border border-blue-700/50 p-3 rounded-lg text-center mb-4">
+                <p class="text-xs text-blue-300 mb-1">Analyse Multi-Visages</p>
+                <p class="text-xl font-bold text-white">${apiData.count} Détection(s)</p>
+            </div>`;
 
-                                apiData.detections.forEach((det, index) => {
-                                    const label = det.label.charAt(0).toUpperCase() + det.label.slice(1);
-                                    const percent = (det.confidence * 100).toFixed(1);
-                                    const colorClass = colorMap[det.label.toLowerCase()] || colorMap['default'];
-                                    const hexColor = det.label === 'marcel' ? '#0ea5e9' : (det.label === 'jemima' ? '#10b981' : '#f59e0b');
+        // CORRECTION CRITIQUE : On vérifie si detections existe ET est une liste
+        if (apiData.detections && Array.isArray(apiData.detections)) {
+            apiData.detections.forEach((det, index) => {
+                const label = det.label.charAt(0).toUpperCase() + det.label.slice(1);
+                const percent = (det.confidence * 100).toFixed(1);
+                const colorClass = colorMap[det.label.toLowerCase()] || colorMap['default'];
+                
+                listHtml += `
+                    <div class="space-y-1 mb-4 p-2 rounded-md bg-slate-800/20 border border-slate-700/30">
+                        <div class="flex justify-between text-xs items-center">
+                            <span class="text-slate-200">${label} #${index+1}</span>
+                            <span class="text-brand-400 font-mono font-bold">${percent}%</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div class="h-full ${colorClass} rounded-full" style="width:${percent}%"></div>
+                        </div>
+                    </div>`;
+            });
+        } else {
+            listHtml += `<p class="text-center text-slate-500 text-xs">Aucun détail disponible</p>`;
+        }
 
-                                    // Liste à gauche
-                                    listHtml += `
-                                        <div class="space-y-1 mb-4 p-2 rounded-md bg-slate-800/20 border border-slate-700/30">
-                                            <div class="flex justify-between text-xs items-center">
-                                                <span class="text-slate-200">${label} #${index+1}</span>
-                                                <span class="text-brand-400 font-mono font-bold">${percent}%</span>
-                                            </div>
-                                            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                                <div class="h-full ${colorClass} rounded-full" style="width:${percent}%"></div>
-                                            </div>
-                                        </div>`;
+        if (detResultsList) detResultsList.innerHTML = listHtml;
+    }
 
-                                    // Boîtes sur l'image (Estimation ratio 4000x3000 pour tes coordonnées)
-                                    const [x1, y1, x2, y2] = det.bbox;
-                                    const wImg = 4500, hImg = 3500; // Ajuste selon la taille réelle de ton image
-                                    
-                                    boxesHtml += `
-                                        <div class="bounding-box" style="left:${(x1/wImg*100).toFixed(2)}%; top:${(y1/hImg*100).toFixed(2)}%; width:${((x2-x1)/wImg*100).toFixed(2)}%; height:${((y2-y1)/hImg*100).toFixed(2)}%; border: 2px solid ${hexColor}; position: absolute;">
-                                            <span class="absolute -top-5 left-0 text-white text-[9px] px-1 rounded font-bold" style="background:${hexColor}">
-                                                ${label}
-                                            </span>
-                                        </div>`;
-                                });
-                                // Injection EXCLUSIVE dans le bloc détection
-                                 if (detResultsList) detResultsList.innerHTML = listHtml;
-                            }
-
-                            // --- 2. INJECTION FINALE DANS LES DEUX BLOCS ---
-                    
-                         
-                            
-                            // On injecte toujours les boîtes sur l'image
-                            if (detBoxes) detBoxes.innerHTML = boxesHtml;
-            }
-
-
+    // On injecte les boîtes HTML seulement si le backend n'a pas déjà envoyé l'image dessinée
+    if (detBoxes && !apiData.annotated_image) {
+        detBoxes.innerHTML = boxesHtml;
+    } else if (detBoxes) {
+        detBoxes.innerHTML = ""; // On vide si on utilise l'image annotée du serveur
+    }
+}
                 // --- Étape 6.8: Initialisation globale au chargement ---
                 document.addEventListener('DOMContentLoaded', () => {
                     renderHistoryTable();
