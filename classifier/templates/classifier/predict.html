@@ -918,24 +918,36 @@
         }
 
          async function detectionEtAfficher(file) {
-            const url = 'https://nyembo-face-recognition-api.hf.space/detect';
-            const formData = new FormData();
-            formData.append('file', file);
+    const url = 'https://nyembo-face-recognition-api.hf.space/detect';
+    const formData = new FormData();
+    formData.append('file', file);
 
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    body: formData
-                });
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
 
-                const apiData = await response.json();
-                
-                return apiData;
+        const apiData = await response.json();
 
-            } catch (error) {
-                console.error("Erreur API:", error);
-            }
+        if (apiData && apiData.annotated_image) {
+            // 1. On récupère la balise image qui affiche l'aperçu
+            const detPreview2 = document.getElementById('det-preview'); 
+            
+            // 2. On remplace la source par l'image envoyée par le backend (avec les cadres)
+            detPreview2.src = apiData.annotated_image;
+            
+            // 3. (Optionnel) Mise à jour du compteur ou des logs
+            console.log(`Détection réussie : ${apiData.count} visages trouvés.`);
         }
+        
+        return apiData;
+
+    } catch (error) {
+        console.error("Erreur API:", error);
+    }
+}
+
     </script>
 </body>
 </html>
